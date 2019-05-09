@@ -1,0 +1,18 @@
+---
+
+pipeline: "Nanopore Cas9 enrichment tutorial"
+
+# define a name to describe the workflow; this will be used to name BAM files etc
+study_name: "cas9_FAK76554"
+
+# pointer to a reference sequence that reads will be mapped to
+reference_genome: "http://ftp.ensembl.org/pub/release-96/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz"
+
+# bed file describing the target regions 
+target_regions: "RawData/enrichment_targets.bed"
+
+# fastq sequences to be mapped placed in a folder
+fastq: "RawData/DoubleCut/20190502_1617_GA30000_FAK76554_5a42db91/fastq_pass"
+#fastq: "RawData/DoubleCut/20190502_1617_GA30000_FAK76554_5a42db91/FAK76554_9b52beb8b4f9ec458eb28c28b35822acaff84952.fastq"
+
+

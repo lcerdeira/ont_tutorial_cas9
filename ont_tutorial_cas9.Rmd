@@ -1,0 +1,377 @@
+---
+title: "Cas9Vignette"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(tidy=TRUE, tidy.opts=list(width.cutoff=80), 
+                      fig.width=9, fig.height=6, warning=FALSE, message=FALSE, 
+                      kable.force.latex=TRUE,
+                      highlight=TRUE,
+                      cache.path="Analysis/Cache/",
+                      knitr.table.format = "html",
+                      width = 120,
+                      knitr.kable.NA = '')
+
+options(knitr.kable.NA = '')
+
+library(yaml)
+library(session)
+library(kableExtra)
+library(ggplot2)
+library(RColorBrewer)
+library(scales) # required for comma
+source("BamParser.R")
+
+config <- yaml.load_file("config.yaml")
+bed_src <- config$target_regions
+study <- config$study_name
+reference <- config$reference_genome
+
+offTargetThreshold <- 20
+
+### here lie dragons ###
+# expeditions below this comment at your own risk
+# welcome feedback and suggestions ...
+```
+
+
+```{r, echo=FALSE}
+# setup location for cache files and R content
+force <- FALSE
+r_results <- file.path("Analysis","R")
+dir.create(r_results, showWarnings = FALSE, recursive=TRUE)
+```
+
+```{r, echo=FALSE}
+# load the reference genome ...
+# expectations and locations based on the project Snakemake file ...
+referenceGenome.file <- file.path("Analysis", "ReferenceGenome", gsub("(\\.zip)|(\\.bz2)|(\\.gz)", "", basename(reference)))
+loadReferenceGenome()
+# for the tutorial we are stripping out the non-primary chromosome chunks ... - in current human genome anything with a dot in name
+# the loadReferenceGenome method is removing the MT genome
+referenceGenome <- referenceGenome[-grep("\\.", referenceGenome[,1]),]
+```
+
+```{r, echo=FALSE}
+# identify the BAM file(s) ...
+mappedBam <- file.path("Analysis","Minimap2", paste0(study, ".bam"))
+unmappedBam = file.path("Analysis","Minimap2", paste0(study, ".unmapped.quals"))
+# and parse the unmapped content
+unmappedReads <- harvestUnmapped(unmappedBam)
+```
+
+```{r, echo=FALSE}
+# load bed file and define what is on-, off- and near-target
+bed <- data.table::fread(file=config$target_regions)
+# create a genomic ranges object for the bed file elements
+br <- GRanges(seqnames=unlist(bed[,1]), IRanges(start=unlist(bed[,2]), end=unlist(bed[,3])))
+# define flanking regions for the target-proximal analysis
+flanking.size <- 25000
+fr <- union(flank(br, width=flanking.size, start=TRUE), flank(br, width=flanking.size, start=FALSE))
+# create a genomic ranges object for the chromosomes
+gr <- GRanges(seqnames=referenceGenome[,1], IRanges(start=1, end=nchar(referenceGenomeSequence)[referenceGenome[,5]]))
+# and define an off-target ranges ..
+or <- setdiff(disjoin(c(gr, GenomicRanges::reduce(union(br, fr)))), GenomicRanges::reduce(union(br, fr)))
+# name the genes associated with the BED annotations for subsequent display ...
+names(br) <- unlist(bed[,4])
+```
+
+```{r, echo=FALSE}
+## calculate mapping characteristics for or (off target), fr (flanking regions) and br (on target regions)
+# save these data onto disk; this is not the fastest method ...
+targetFile <- file.path(r_results, paste(study, "target_levels", "Rdata",sep="."))
+if (file.exists(targetFile) & !force) {
+  load(file=targetFile)
+} else {
+  extractMappingInfo <- function(x, xr) {
+    chrId <- as.character(seqnames(xr[x]))
+    start <- start(ranges(xr[x]))
+    window <- width(ranges(xr[x]))
+    sid <- getStringSetId(chrId)
+    harvestBam(start, sid, chrId, window, mappedBam) 
+  }
+  orRes <- fixBamFileColumns(as.data.frame(t(as.data.frame(lapply(seq_along(or), extractMappingInfo, xr=or))), stringsAsFactors=FALSE, row.names=seq_along(or)))
+  
+  frRes <- fixBamFileColumns(as.data.frame(t(as.data.frame(lapply(seq_along(fr), extractMappingInfo, xr=fr))), stringsAsFactors=FALSE, row.names=seq_along(fr)))
+  
+  brRes <- fixBamFileColumns(as.data.frame(t(as.data.frame(lapply(seq_along(br), extractMappingInfo, xr=br))), stringsAsFactors=FALSE, row.names=seq_along(br)))
+  save(orRes, frRes, brRes, file=targetFile)
+} 
+
+backgroundDepth <- sum(orRes$meanCov *orRes$width) / sum(orRes$width)
+```
+
+
+The first step for the analysis of the Cas9 enrichment strategy is to assess the coverage of sequence reads across the whole genome. The **`BAM`** file produced by mapping the sequence reads to the reference genome using **`Minimap2`** is assessed for this purpose. The genome is broken into three slices. These slices correspond to 
+
+* The **`On Target`** regions that are defined as regions of interest in the provided **`BED`** format coordinate file (*`r bed_src`*)
+* The **`Target Flanking`** regions that are immediately upstream or downstream of an On Target region (this regions is defined as `r as.integer(flanking.size)` bases)
+* The **`Off Target`** regions are defined as the rest of the genome
+
+Target regions are calculated using the genome coordinates from the provided reference genome (`r basename(referenceGenome.file)`) and the **R** **`GenomicRanges`** package is used to select for the coordinates that correspond to OnTarget, TargetFlanking and OffTarget regions. The genome reference sequence and mapped reads are assessed for a number of metrics that could be used to assess the performance of the target capture. This BAM parsing analysis utilises both the **`GenomicRanges`** coordinate handling package and the **`Rsamtools`** package for the parsing and exploration of BAM files.
+
+
+```{r summaryStatistics, echo=FALSE, results="asis", eval=TRUE}
+
+addRow <- function(df, metric, count, percentage="") {
+  return(df %>% add_row(metric=metric, count=count, percentage=percentage))
+}
+
+collateMappingCharacteristics <- function(bamFile, unmappedBamFile=NA) {
+  suppressWarnings(if (is.na(unmappedBamFile)) { unmappedBamFile <- data.frame(width=numeric(), quality=numeric()) })
+  # basic counts for #s of reads
+  mappedSeqs <- sum(bamFile$readStarts)
+  unmappedSq <- nrow(unmappedBamFile)
+  totalReads <- mappedSeqs + unmappedSq
+  
+  # basic counts for #s of nucleotides
+  mappedNts <- sum(bamFile$basesReadsStarted) 
+  unmappedNts <- sum(unmappedBamFile$width)
+  fastqNts <- mappedNts + unmappedNts
+  mappedClippedNts <- sum(bamFile$cigarMapped)
+  supplNts <- sum(bamFile$xmapped, na.rm=TRUE)
+  # basic counts for read lengths
+  mappedLength <- mean(rep(bamFile$readLen, bamFile$readStarts))
+  unmappedLength <- mean(unmappedBamFile$width)
+  # basic counts for quality scores
+  mappedQuality <- mean(rep(bamFile$readQ, bamFile$readStarts))
+  unmappedQuality <- mean(unmappedBamFile$quality)
+  suppQuality <- mean(rep(bamFile$xmapq, (bamFile$xsupp + bamFile$xsecd)))
+  
+  # mapping details ...
+  mismatches <- sum(bamFile$mismatches)
+  insertions <- sum(bamFile$cigarInsertionBases)
+  deletions <- sum(bamFile$cigarDeletionBases)
+  meanMapQ <- mean(bamFile$mapq, na.rm=TRUE)
+  
+  # reference genome characteristics
+  refSize <- sum(bamFile$width)
+  Ncount <- sum(bamFile$ncount)
+  GCcount <- sum(bamFile$gccount)
+  chromosomeCount <- length(unique(bamFile$chrId))
+  meanCov <- sum(bamFile$meanCov * bamFile$width)/sum(bamFile$width)
+  suppCov <- sum(bamFile$xcov * bamFile$width)/sum(bamFile$width)
+  
+  summary.df <- data.frame(metric=character(), count=character(), percentage=character(), stringsAsFactors = FALSE)
+  summary.df <- addRow(summary.df, "total sequence reads", scales::comma_format()(totalReads))
+  summary.df <- addRow(summary.df, "mapped reads (primary)", scales::comma_format()(mappedSeqs), 
+                                       paste(round(mappedSeqs / totalReads * 100, digits=2),"%", sep=""))
+  summary.df <- addRow(summary.df, ".....multi-mapping reads (secondary)", scales::comma_format()(sum(bamFile$xsecd)))
+  summary.df <- addRow(summary.df, ".....multi-mapping reads (supplementary)", scales::comma_format()(sum(bamFile$xsupp)))
+  summary.df <- addRow(summary.df, "unmapped reads", scales::comma_format()(unmappedSq), 
+                                       paste(round(unmappedSq / totalReads * 100, digits=2),"%", sep=""))
+  
+  summary.df <- addRow(summary.df, "total fastq nucleotides", scales::comma_format()(fastqNts))
+  summary.df <- addRow(summary.df, "sum of nucleotides from mapped reads", scales::comma_format()(mappedNts), 
+                                       paste(round(mappedNts / fastqNts * 100, digits=2),"%", sep=""))
+  summary.df <- addRow(summary.df, ".....nucleotides from clipped mapping", scales::comma_format()(mappedClippedNts), 
+                                       paste(round(mappedClippedNts / fastqNts * 100, digits=2),"%", sep=""))
+  summary.df <- addRow(summary.df, "unmapped nucleotides", scales::comma_format()(unmappedNts), 
+                                       paste(round(unmappedNts / fastqNts * 100, digits=2),"%", sep=""))
+  summary.df <- addRow(summary.df, "supp/secondary nucleotides", scales::comma_format()(supplNts))
+  
+  summary.df <- addRow(summary.df, "mean read length (mapped)", scales::comma_format()(mappedLength))
+  summary.df <- addRow(summary.df, "mean read length (unmapped)", scales::comma_format()(unmappedLength))
+  summary.df <- addRow(summary.df, "mean read length (supp/second)", scales::comma_format()(mean(bamFile$xwidth, na.rm=TRUE)))
+  
+  summary.df <- addRow(summary.df, "mean read quality (mapped)", round(mappedQuality, digits=2))
+  summary.df <- addRow(summary.df, "mean read quality (unmapped)", round(unmappedQuality, digits=2))
+  
+  summary.df <- addRow(summary.df, "mean mapping quality (primary)", round(meanMapQ, digits=2))
+  
+  summary.df <- addRow(summary.df, "Chromosome Count", chromosomeCount)
+  summary.df <- addRow(summary.df, "Reference size (nt)", scales::comma_format()(refSize))
+  summary.df <- addRow(summary.df, "N count", scales::comma_format()(Ncount),
+                                       paste(round(Ncount / refSize * 100, digits=2),"%", sep=""))
+  summary.df <- addRow(summary.df, "GC count", scales::comma_format()(GCcount), 
+                                       paste(round(GCcount / (refSize - Ncount) * 100, digits=2),"%", sep=""))
+  summary.df <- addRow(summary.df, "Mean coverage (primary)", round(meanCov, digits=2))
+  
+  rownames(summary.df) <- summary.df[,1]
+  summary.df <- summary.df[,-1]
+  return(summary.df)
+}
+
+summary.df <- cbind(collateMappingCharacteristics(orRes, unmappedReads), 
+                    collateMappingCharacteristics(frRes),
+                    collateMappingCharacteristics(brRes))
+summary.df <- summary.df[, -c(2,4,6)]
+summary.df[summary.df == "NaN"] <- ""
+
+
+row.names(summary.df)[6]<- paste0(row.names(summary.df)[6], footnote_marker_symbol(1, "html"))
+row.names(summary.df)[8]<- paste0(row.names(summary.df)[8], footnote_marker_symbol(2, "html"))
+row.names(summary.df)[17]<- paste0(row.names(summary.df)[17], footnote_marker_symbol(3, "html"))
+row.names(summary.df)[20]<- paste0(row.names(summary.df)[20], footnote_marker_symbol(4, "html"))
+row.names(summary.df)[21]<- paste0(row.names(summary.df)[21], footnote_marker_symbol(5, "html"))
+
+kable(summary.df, format="html", col.names=rep(" ", ncol(summary.df)), caption="Table summarising global mapping characteristics ranked by on-target, target-flanking and off-target", booktabs=TRUE, table.envir='table*', linesep="", escape = FALSE)  %>%
+  add_header_above(c(" ", "Off-target"=1,"Target-flanking"=1,"On-Target"=1)) %>%
+  kable_styling(c("striped", "condensed")) %>%
+  pack_rows("Nucleotides mapped", 6, 10) %>%
+  pack_rows("Sequence length characteristics (nt)", 11, 13) %>%
+  pack_rows("Sequence quality characteristics (phred Qval)", 14, 16) %>%
+  pack_rows("Reference genome characteristics", 17, 21) %>%
+  footnote(symbol=c("fastq bases are calculated from the qwidth field of the mapped sequences and from the sequence length of unmapped sequences","clipped mapping calculated from CIGARquery coordinates", "standard workflow attempts to remove the mitochondrial chromosome and other accessory chromosomes", "The GC content is calculated as % of GC at positions where nucleotide is A/C/G/T", "depth of coverage based only on primary mapping reads"), symbol_title="please note: ", footnote_as_chunk = TRUE)
+
+
+```
+
+
+The next step in the analysis involves looking for the mapping characteristics for each of the targets specified within the BAM file. For brevity, only the most salient metrics are reported here (values such as the number of reads, the number of bases and mapping qualities), there are other values within the data (please check the **`brRes`** object).
+
+```{r, echo=FALSE, results="asis", eval=TRUE}
+
+bygene <- cbind(brRes, geneName=unlist(bed[,4]))[,c("geneName", "chrId", "readStarts", "basesReadsStarted", "readLen", "readQ", "mapq", "meanCov")]
+bygene$fwd <- round(as.numeric(brRes$plusStrand)/as.numeric(brRes$readStarts), digits=2)
+bygene$basesReadsStarted <- scales::comma_format()(bygene$basesReadsStarted)
+
+colnames(bygene)[1]<- paste0("Target Gene")
+colnames(bygene)[2]<- paste0("Chr.")
+colnames(bygene)[3]<- paste0("Read count", footnote_marker_symbol(1, "html"))
+colnames(bygene)[4]<- paste0("Bases", footnote_marker_symbol(2, "html"))
+colnames(bygene)[5]<- paste0("Mean readLength")
+colnames(bygene)[6]<- paste0("Mean readQuality")
+colnames(bygene)[7]<- paste0("Mean mapQuality")
+colnames(bygene)[8]<- paste0("Mean coverage")
+colnames(bygene)[9]<- paste0("Reads on FWD(%)", footnote_marker_symbol(3, "html"))
+
+kable(bygene, format="html", caption="Table summarising target mapping for pre-defined regions of interest", booktabs=TRUE, table.envir='table*', linesep="", escape = FALSE)  %>%
+  kable_styling(c("striped", "condensed")) %>%
+  footnote(symbol=c("reads are counted as all sequence reads that originate within the defined BED target region", "bases are counted as sum of nucleotides from reads that originate within target region; some of these bases may overlap flanking region", "reads are assessed for strand of mapping; here reads on + strand are summarised as percentage of all"), symbol_title="please note: ", footnote_as_chunk = TRUE)
+
+```
+
+
+
+
+
+```{r targetGeneDepths, echo=FALSE}
+colMax=4
+suppressWarnings(posMatrix <- matrix(gtools:::mixedsort(names(br)), ncol=colMax, byrow=TRUE))
+  # data may be recycled ... remove duplicate values ...
+posMatrix[which(duplicated(posMatrix[seq(nrow(posMatrix) * ncol(posMatrix))]))]<-NA
+
+plotLegend <- paste0("t::",gtools:::mixedsort(names(br)))
+plotCols <- ceiling(length(plotLegend) / colMax)
+legendDF <- data.frame(x=Inf, y=Inf, 
+                         lab=plotLegend, 
+                         row=unlist(lapply(1:plotCols, rep, times=colMax))[1:length(plotLegend)], 
+                         col=rep(seq(1, colMax), length.out=length(plotLegend)))
+
+
+
+# reading in multiple targets that can span megabase regions leads to some silly memory usage ...
+# not sure why ... gc()???
+
+
+aggregateDepthInfo <- function(x, xr) {
+    chrId <- as.character(seqnames(xr[x]))
+    start <- start(ranges(xr[x]))
+    end <- end(ranges(xr[x]))
+    geneId <- as.character(names(xr)[x])
+    cat(paste0(geneId, "\n"))
+    
+    # dummy values for debug ... C9orf72 ..
+    chrId <- "9"
+    start <- 27523486
+    end <- 27623547
+    geneId <- "C9orf72"
+    
+  #   params=ScanBamParam(which=GRanges(seqnames = chrId, ranges = IRanges(start = start, end = end)), 
+  #                     what=c("strand", "pos", "cigar"), 
+  #                     flag=scanBamFlag(isSupplementaryAlignment=FALSE, isSecondaryAlignment=FALSE))
+  # SeqCigar <- as.data.frame(scanBam(BamFile(mappedBam), param=params)[[1]])
+  # cov <- GAlignments(seqnames=as.character(seq_along(SeqCigar$pos)), pos=SeqCigar$pos, strand=SeqCigar$strand, cigar=as.character(SeqCigar$cigar))
+  # dd <- as.data.frame(coverage(cov, shift=-start, width=(end-start), method="auto"))
+  # dd$pos <- seq_along(dd$value)+start
+  # dd$rpos <- seq_along(dd$value)
+  # dd$gene <- geneId
+  # dd$chrId <- chrId
+  # pos <- which(posMatrix==geneId, arr.ind=TRUE)
+  # dd$row <- pos[[1]]
+  # dd$col <- pos[[2]]
+  
+  
+  params=ScanBamParam(which=GRanges(seqnames = chrId, ranges = IRanges(start = start, end = end)), 
+                       what=c("strand", "pos", "cigar"), 
+                       flag=scanBamFlag(isSupplementaryAlignment=FALSE, isSecondaryAlignment=FALSE))
+  SeqCigar <- as.data.frame(scanBam(BamFile(mappedBam), param=params)[[1]])
+  # https://stackoverflow.com/questions/42400257/genomicranges-add-coverage
+  gal <-GAlignments(seqnames=as.character(seq_along(SeqCigar$pos)), 
+                     pos=SeqCigar$pos, 
+                     strand=SeqCigar$strand, 
+                     cigar=as.character(SeqCigar$cigar))
+  
+  bins <- GenomicRanges::tileGenome(seqlengths=c(g=end-start), tilewidth=10, cut.last.tile.in.chrom=TRUE)
+  
+  return(dd)
+}
+
+
+aggregatedCov <- bind_rows(lapply(seq_along(br), aggregateDepthInfo, xr=br), .id = "column_label")
+
+singlePlot <- function(geneName, covData) {
+  covData <- covData[which(covData$gene==geneName),]
+  ggplot(covData)+geom_line(aes(x=pos,y=value), size=0.5, colour=brewer.pal(6, "Paired")[2])+xlab(paste("Position on chromosome",unique(covData$chrId))) + ylab("Depth of Coverage (X)") + labs(title=paste("Plot showing depth of coverage vs position for target", geneName)) + scale_x_continuous(labels = comma)
+}
+
+```
+
+
+```{r}
+singlePlot("C9orf72", aggregatedCov)
+```
+
+
+
+```{r aggregatePlot}
+plotCoverageMegablock <- function(covData) {
+  covData$rpos <- (as.numeric(covData$rpos))/1000000
+  suppressWarnings(megadepthplot <- ggplot(covData, aes(rpos, value)) + geom_line(colour=brewer.pal(6, "Paired")[2]) + facet_grid(rows = vars(row), cols=vars(col)) + theme(axis.text.x = element_text(angle = 90, hjust = 1), strip.text.y = element_blank(), strip.text.x = element_blank()) + xlab("Position across target region (Mb)") + ylab("Depth of Coverage (X)") + labs(title="Plot showing depth of coverage vs position for target regions") + geom_text(aes(x,y,label=lab), data=legendDF, vjust=1, hjust=1, size=3.5) + theme(plot.title = element_text(size=11)))
+  return(megadepthplot)
+}
+
+plotCoverageMegablock(aggregatedCov)
+
+```
+
+
+
+```{r offTargetByDepth}
+
+# backgroundDepth <- sum(orRes$meanCov *orRes$width) / sum(orRes$width)
+# offTargetThreshold <- 20
+
+
+aggregateDepthInfo <- function(x, xr) {
+    chrId <- as.character(seqnames(xr[x]))
+    start <- start(ranges(xr[x]))
+    end <- end(ranges(xr[x]))
+    geneId <- as.character(names(xr)[x])
+    
+    chrId <- as.character(seqnames(xr[x]))
+    start <- start(ranges(xr[x]))
+    end <- end(ranges(xr[x]))
+    geneId <- as.character(names(xr)[x])
+    
+    params=ScanBamParam(which=GRanges(seqnames = "1", ranges = IRanges(start = 1, end = 155104999)), 
+                      what=c("qname", "strand", "pos", "cigar"), 
+                      flag=scanBamFlag(isSupplementaryAlignment=FALSE, isSecondaryAlignment=FALSE))
+  SeqCigar <- as.data.frame(scanBam(BamFile(mappedBam), param=params)[[1]])
+  cov <- GAlignments(seqnames=SeqCigar$qname, pos=SeqCigar$pos, strand=SeqCigar$strand, cigar=as.character(SeqCigar$cigar))
+  dd <- as.data.frame(coverage(cov, shift=0, width=(155104999), method="hash"))
+  dd$pos <- seq_along(dd$value)+start
+  dd$rpos <- seq_along(dd$value)
+  dd$gene <- geneId
+  dd$chrId <- chrId
+  pos <- which(posMatrix==geneId, arr.ind=TRUE)
+  dd$row <- pos[[1]]
+  dd$col <- pos[[2]]
+  return(dd)
+}
+
+aggregatedCov <- bind_rows(lapply(seq_along(br), aggregateDepthInfo, xr=br), .id = "column_label")
+
+```
