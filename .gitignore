@@ -27,3 +27,4 @@ rsconnect/
 .Rproj.user
 Analysis
 *.Rout
+*.html

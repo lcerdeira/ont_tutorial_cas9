@@ -21,6 +21,7 @@ library(kableExtra)
 library(ggplot2)
 library(RColorBrewer)
 library(scales) # required for comma
+library(reshape2)
 source("BamParser.R")
 
 config <- yaml.load_file("config.yaml")
@@ -263,8 +264,8 @@ legendDF <- data.frame(x=Inf, y=Inf,
 
 
 # reading in multiple targets that can span megabase regions leads to some silly memory usage ...
+# data.frame conversion appears to be the challenge ...
 # not sure why ... gc()???
-
 
 aggregateDepthInfo <- function(x, xr) {
     chrId <- as.character(seqnames(xr[x]))
@@ -274,10 +275,10 @@ aggregateDepthInfo <- function(x, xr) {
     cat(paste0(geneId, "\n"))
     
     # dummy values for debug ... C9orf72 ..
-    chrId <- "9"
-    start <- 27523486
-    end <- 27623547
-    geneId <- "C9orf72"
+    # chrId <- "9"
+    # start <- 27523486
+    # end <- 27623547
+    # geneId <- "C9orf72"
     
   #   params=ScanBamParam(which=GRanges(seqnames = chrId, ranges = IRanges(start = start, end = end)), 
   #                     what=c("strand", "pos", "cigar"), 
@@ -303,9 +304,19 @@ aggregateDepthInfo <- function(x, xr) {
                      pos=SeqCigar$pos, 
                      strand=SeqCigar$strand, 
                      cigar=as.character(SeqCigar$cigar))
+  cov <- coverage(gal, shift=-start, width=(end-start))
   
+  xx <- as(cov, "GRanges")
+  xx <- GRanges(seqnames=rep("g",length(seqnames(xx))), ranges=ranges(xx), score=score(xx))
+  rl <- coverage(xx, weight="score")
   bins <- GenomicRanges::tileGenome(seqlengths=c(g=end-start), tilewidth=10, cut.last.tile.in.chrom=TRUE)
-  
+  dd <- as.data.frame(binnedAverage(bins, rl, "binned_cov"))
+  pos <- which(posMatrix==geneId, arr.ind=TRUE)
+  dd$row <- pos[[1]]
+  dd$col <- pos[[2]]
+  dd$gene <- geneId
+  dd$chrId <- chrId
+  dd$pos <- dd$start+start
   return(dd)
 }
 
@@ -314,7 +325,7 @@ aggregatedCov <- bind_rows(lapply(seq_along(br), aggregateDepthInfo, xr=br), .id
 
 singlePlot <- function(geneName, covData) {
   covData <- covData[which(covData$gene==geneName),]
-  ggplot(covData)+geom_line(aes(x=pos,y=value), size=0.5, colour=brewer.pal(6, "Paired")[2])+xlab(paste("Position on chromosome",unique(covData$chrId))) + ylab("Depth of Coverage (X)") + labs(title=paste("Plot showing depth of coverage vs position for target", geneName)) + scale_x_continuous(labels = comma)
+  ggplot(covData)+geom_line(aes(x=pos,y=binned_cov), size=0.5, colour=brewer.pal(6, "Paired")[2])+xlab(paste("Position on chromosome",unique(covData$chrId))) + ylab("Depth of Coverage (X)") + labs(title=paste("Plot showing depth of coverage vs position for target", geneName)) + scale_x_continuous(labels = comma)
 }
 
 ```
@@ -326,10 +337,10 @@ singlePlot("C9orf72", aggregatedCov)
 
 
 
-```{r aggregatePlot}
+```{r aggregatePlot, echo=FALSE}
 plotCoverageMegablock <- function(covData) {
-  covData$rpos <- (as.numeric(covData$rpos))/1000000
-  suppressWarnings(megadepthplot <- ggplot(covData, aes(rpos, value)) + geom_line(colour=brewer.pal(6, "Paired")[2]) + facet_grid(rows = vars(row), cols=vars(col)) + theme(axis.text.x = element_text(angle = 90, hjust = 1), strip.text.y = element_blank(), strip.text.x = element_blank()) + xlab("Position across target region (Mb)") + ylab("Depth of Coverage (X)") + labs(title="Plot showing depth of coverage vs position for target regions") + geom_text(aes(x,y,label=lab), data=legendDF, vjust=1, hjust=1, size=3.5) + theme(plot.title = element_text(size=11)))
+  covData$start <- (as.numeric(covData$start))/1000
+  suppressWarnings(megadepthplot <- ggplot(covData, aes(start, binned_cov)) + geom_line(colour=brewer.pal(6, "Paired")[2]) + facet_grid(rows = vars(row), cols=vars(col)) + theme(axis.text.x = element_text(angle = 90, hjust = 1), strip.text.y = element_blank(), strip.text.x = element_blank()) + xlab("Position across target region (kb)") + ylab("Depth of Coverage (X)") + labs(title="Plot showing depth of coverage vs position for target regions") + geom_text(aes(x,y,label=lab), data=legendDF, vjust=1, hjust=1, size=3.5) + theme(plot.title = element_text(size=11)))
   return(megadepthplot)
 }
 
@@ -339,39 +350,41 @@ plotCoverageMegablock(aggregatedCov)
 
 
 
-```{r offTargetByDepth}
+```{r offTargetByDepth, echo=FALSE}
 
 # backgroundDepth <- sum(orRes$meanCov *orRes$width) / sum(orRes$width)
-# offTargetThreshold <- 20
+# offTargetThreshold <- 20 (x)
 
+offTargetLevel <- backgroundDepth * offTargetThreshold
+offTargetTileWidth <- 100
 
-aggregateDepthInfo <- function(x, xr) {
-    chrId <- as.character(seqnames(xr[x]))
-    start <- start(ranges(xr[x]))
-    end <- end(ranges(xr[x]))
-    geneId <- as.character(names(xr)[x])
-    
-    chrId <- as.character(seqnames(xr[x]))
-    start <- start(ranges(xr[x]))
-    end <- end(ranges(xr[x]))
-    geneId <- as.character(names(xr)[x])
-    
-    params=ScanBamParam(which=GRanges(seqnames = "1", ranges = IRanges(start = 1, end = 155104999)), 
-                      what=c("qname", "strand", "pos", "cigar"), 
-                      flag=scanBamFlag(isSupplementaryAlignment=FALSE, isSecondaryAlignment=FALSE))
-  SeqCigar <- as.data.frame(scanBam(BamFile(mappedBam), param=params)[[1]])
-  cov <- GAlignments(seqnames=SeqCigar$qname, pos=SeqCigar$pos, strand=SeqCigar$strand, cigar=as.character(SeqCigar$cigar))
-  dd <- as.data.frame(coverage(cov, shift=0, width=(155104999), method="hash"))
-  dd$pos <- seq_along(dd$value)+start
-  dd$rpos <- seq_along(dd$value)
-  dd$gene <- geneId
-  dd$chrId <- chrId
-  pos <- which(posMatrix==geneId, arr.ind=TRUE)
-  dd$row <- pos[[1]]
-  dd$col <- pos[[2]]
-  return(dd)
-}
+seqlengths(or) <- width(referenceGenomeSequence[getStringSetId(names(seqlengths(or)))])
+params=ScanBamParam(which=or,
+                       what=c("rname", "strand", "pos", "cigar"), 
+                       flag=scanBamFlag(isSupplementaryAlignment=FALSE, isSecondaryAlignment=FALSE))  
+rga <- readGAlignments(file=mappedBam, param=params)
+rc <- coverage(rga)
+bins <- tileGenome(seqlengths(or), tilewidth = offTargetTileWidth, cut.last.tile.in.chrom=TRUE)
+# handle any hanger-on chromosome ids
+rc <- rc[which(names(rc) %in% seqlevels(bins))]
+ba <- binnedAverage(bins, rc, "binned_cov")
+baf <- ba[which(ba$binned_cov>=offTargetLevel)]  # off-target
+bab <- setdiff(ba[which(ba$binned_cov>=1)], baf) # background
 
-aggregatedCov <- bind_rows(lapply(seq_along(br), aggregateDepthInfo, xr=br), .id = "column_label")
+targetMap <- data.frame(chromosome=gtools:::mixedsort(levels(seqnames(or))), stringsAsFactors=FALSE)
+targetMap <- cbind(targetMap, offtarget=unlist(lapply(targetMap$chromosome, function(x) { length(which(seqnames(baf)==x))*offTargetTileWidth } )))
+targetMap <- cbind(targetMap, background=unlist(lapply(targetMap$chromosome, function(x) { length(which(seqnames(bab)==x))*offTargetTileWidth } )))
+targetMap <- cbind(targetMap, ontarget=as.integer(lapply(targetMap$chromosome, function(x) { width(br[which(seqnames(br)==x)]) } )))
+targetMap[is.na(targetMap)] <- 0
+
+targetMap
+
+targetMelt <- melt(targetMap)
+targetMelt$variable <- factor(as.character(targetMelt$variable), c("background", "ontarget", "offtarget"))
+targetMelt$chromosome <- factor(targetMelt$chromosome, gtools:::mixedsort(unique(targetMelt$chromosome)))
+
+ggplot(targetMelt, aes(chromosome, value)) + geom_col(aes(fill=variable)) + scale_y_continuous(labels = comma) + ylab("Number of bases (nt)") + labs(title="Barchart showing number of references bases assigned as ontarget, offtarget or background") + scale_fill_brewer(direction=-1, palette="Spectral")
 
 ```
+
+
