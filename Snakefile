@@ -99,7 +99,7 @@ rule Minimap2:
         shell("gunzip -c "+ " ".join([fastq + os.path.sep + x for x in list(filter(fastqZRx.search, files))])+""" | minimap2 -2 -a -x map-ont --MD -R '@RG\tID:{params.rg}\tSM:{params.rg}' -t 8 {input.ref} - | samtools view -@ 4 -F 0x4 -O BAM -U {output.ubam} | samtools sort -@ 4 > {output.bam}""")      
 
 
-# build minimap2 index
+# build BAM index
 rule SortedBamIndex: 
   input:
     bam = "Analysis/Minimap2/"+fastqTarget+".bam"
@@ -109,8 +109,31 @@ rule SortedBamIndex:
     "samtools index -b {input.bam}"
 
 
+# render quality values from unmapped reads 
+rule RenderUnmappedQvals:
+  input:
+    ubam = "Analysis/Minimap2/"+fastqTarget+".unmapped.bam"
+  output:
+    uqual = "Analysis/Minimap2/"+fastqTarget+".unmapped.quals"
+  shell:
+    "samtools view -@ 5 -O sam {input.ubam} | awk '{{print $11}}' > {output.uqual}"
+
+
+# perform the R preprocess 
+rule Rpreprocess:
+  input:
+    bam = "Analysis/Minimap2/"+fastqTarget+".bam",
+    bai = "Analysis/Minimap2/"+fastqTarget+".bam.bai",
+    uqual = "Analysis/Minimap2/"+fastqTarget+".unmapped.quals"
+  output:
+    rout = "Analysis/R/"+fastqTarget+"_mapping_results.Rdata"
+  shell:
+    "Rscript harvest.R"
+    
 
 rule all:
   input:
     ReferenceGenome,
-    "Analysis/Minimap2/"+fastqTarget+".bam.bai"
+    "Analysis/Minimap2/"+fastqTarget+".bam.bai",
+    "Analysis/Minimap2/"+fastqTarget+".unmapped.quals",
+    "Analysis/R/"+fastqTarget+"_mapping_results.Rdata"

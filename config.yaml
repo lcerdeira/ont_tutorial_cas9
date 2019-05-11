@@ -15,4 +15,10 @@ target_regions: "RawData/enrichment_targets.bed"
 fastq: "RawData/DoubleCut/20190502_1617_GA30000_FAK76554_5a42db91/fastq_pass"
 #fastq: "RawData/DoubleCut/20190502_1617_GA30000_FAK76554_5a42db91/FAK76554_9b52beb8b4f9ec458eb28c28b35822acaff84952.fastq"
 
-
+# some genome geometry values
+# gstride is the bin size for summarising depth of coverage across the reference_genome
+gstride: 100
+# target_proximity is the distance up- and down-stream of ontarget BED for defining target proximal mapping
+target_proximity: 10000
+# a threshold for defining off-target mapping; this is ($level$ * mean background) expression
+offtarget_level: 20

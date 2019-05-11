@@ -22,26 +22,21 @@ harvestUnmapped <- function(qualfilelocation, chunk.size=100000, force=FALSE) {
   
   # samtools view -@ 4 -O sam -h clive.minimap2.bam | samtools view -@ 4 -F 0x4 -O BAM -U clive.minimap2.unmapped.bam -T ../../ReferenceData/Homo_sapiens.GRCh37.75.dna.chromosome.ALL.fasta | samtools sort -@ 4 -T ../../ReferenceData/Homo_sapiens.GRCh37.75.dna.chromosome.ALL.fasta > clive.minimap2.samtools.bam
 
-
   chromosomeFile <- file.path(r_results, paste(sub("\\.[^.]*$", "", basename(qualfilelocation)), "rcounts", "Rdata",sep="."))
   if (file.exists(chromosomeFile) & !force) {
     unmapped.content <- readRDS(file=chromosomeFile)
     return(unmapped.content)
   }
-  
   offset <- 0
   unmapped.content <- data.frame(width=integer(),
                                  quality=numeric(),
                                  stringsAsFactors=FALSE) 
-  
   repeat {
     cat(paste("iter", offset, "\n"))
     qual.data <- data.table::fread(file=qualfilelocation, nrows=chunk.size, skip=offset, sep="\n", col.names=c("qual"))
     width <- nchar(qual.data$qual)
     meanQ <- alphabetScore(FastqQuality(qual.data$qual)) / width
-    
     unmapped.content <- rbind(unmapped.content, data.frame(width=width, quality=meanQ))
-    
     if (nrow(qual.data) < chunk.size) {
       break
     }
