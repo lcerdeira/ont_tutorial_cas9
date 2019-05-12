@@ -1,5 +1,7 @@
 import os
 import re
+import pandas as pd
+import sys
 from snakemake.remote.HTTP import RemoteProvider as HTTPRemoteProvider
 
 HTTP = HTTPRemoteProvider()
@@ -9,15 +11,42 @@ configfile: "config.yaml"
 # characterise and/or prepare the specified reference genome
 reference_genome = config["reference_genome"]
 # ReferenceGenome is a derivative of the defined location
-ReferenceGenomeIncoming = os.path.join("ReferenceData", os.path.basename(reference_genome))
-ReferenceGenome = re.sub("(.zip)|(.bz2)|(.gz)", "", os.path.join("Analysis", "ReferenceGenome", os.path.basename(reference_genome)))
-ReferenceGenomeMMI = ReferenceGenome+".mmi"
+ReferenceGenome = os.path.join("ReferenceData", os.path.basename(reference_genome))
+ReferenceGenomeMMI = re.sub("(.zip)|(.bz2)|(.gz)", "", ReferenceGenome)+".mmi"
+
 
 # some fastq handling - a fastq may exist as a provided file that may be compressed or uncompressed; or may be a pointer
 # to a folder that contains one or more fastq files that may themselves be compressed or uncompressed
 # since these files could be quite massive I would prefer to avoid duplication, uncompress or other IO unncessary tasks ...
 fastq = config["fastq"]
 fastqTarget = config["study_name"]
+
+# load targetIds from supplied bed file
+df = pd.read_csv(config["target_regions"], sep="\t", header=None)
+TARGETS = list(df[df.columns[3]])
+
+# decide how we will be accessing the FASTQ files ...
+fastqAccessParam = ""
+if (os.path.isfile(fastq) and re.search("(.gz$)|(.gzip$)", fastq) is not None): # compressed input -file-
+  print("InputFastq is compressed file")
+  fastqAccessParam = "gunzip -c "+fastq
+elif (os.path.isfile(fastq) and re.search("(.gz$)|(.gzip$)", fastq) is None): # uncompressed fastq -file-
+  print("InputFastq is uncompressed file")
+  fastqAccessParam = "cat "+fastq
+elif (os.path.isdir(fastq)):
+  files = os.listdir(fastq)
+  fastqRx = re.compile("(\.fastq$)|(\.fq$)")
+  fastqZRx = re.compile("(\.fastq.gz$)|(\.fq.gz$)")
+  fastqNative = len(list(filter(fastqRx.search, files)))
+  fastqCompre = len(list(filter(fastqZRx.search, files)))
+  if (fastqNative>=fastqCompre):
+    print("InputFastq is set of uncompressed file*s*")
+    fastqAccessParam = "cat "+ " ".join([fastq + os.path.sep + x for x in list(filter(fastqRx.search, files))])
+  else:
+    print("InputFastq is set of compressed file*s*")
+    fastqAccessParam = "gunzip -c "+ " ".join([fastq + os.path.sep + x for x in list(filter(fastqRx.search, files))])
+print(fastqAccessParam)
+
 
 """
 This snakemake rule will download a reference genome from an open genome database etc
@@ -27,29 +56,9 @@ rule download_reference_genome:
   input:
     HTTP.remote(reference_genome, keep_local=True)
   output:
-    ReferenceGenomeIncoming
-  run:
-    shell("mv {input} {output}")
-
-
-"""
-The supplied genome reference may be gzip / bzip2 / ... compressed - snakemake has problems
-with uncompressing files into the same folder - therefore we will either copy or uncompress
-the file into a location within the Analysis folder - this is not required for Minimap2 or
-NGMLR
-"""
-rule unpack_reference_genome:
-  input:
-    ReferenceGenomeIncoming
-  output:
     ReferenceGenome
   run:
-    if (re.search("\.gz$", ReferenceGenomeIncoming)):
-      shell("gunzip -c {input} > {output}")
-    elif (re.search("\.bz2$", ReferenceGenomeIncoming)):
-      shell("bunzip2 --keep -d {input}")
-    else:
-      shell("cp {input} {output}")
+    shell("mv {input} {output}")
 
 
 
@@ -78,25 +87,10 @@ rule Minimap2:
     bam = "Analysis/Minimap2/"+fastqTarget+".bam",
     ubam = "Analysis/Minimap2/"+fastqTarget+".unmapped.bam"
   params:
-    rg = config["pipeline"]
-  run:
-    source = None
-    # this code doesn't look very easy to read - there is considerable duplication
-    # I am not sure how we could for example, force and evaluation of a variable (might contain --cat--) within a shell command
-    if (os.path.isfile(fastq) and re.search("(.gz$)|(.gzip$)", fastq) is not None): # compressed input -file-
-      shell("""gunzip -c {fastq} | minimap2 -2 -a -x map-ont --MD -R '@RG\tID:{params.rg}\tSM:{params.rg}' -t 8 {input.ref} - | samtools view -@ 4 -F 0x4 -O BAM -U {output.ubam} | samtools sort -@ 4 > {output.bam}""")
-    elif (os.path.isfile(fastq) and re.search("(.gz$)|(.gzip$)", fastq) is None): # uncompressed fastq -file-
-      shell("""cat {fastq} | minimap2 -2 -a -x map-ont --MD -R '@RG\tID:{params.rg}\tSM:{params.rg}' -t 8 {input.ref} - | samtools view -@ 4 -F 0x4 -O BAM -U {output.ubam} | samtools sort -@ 4 > {output.bam}""")
-    elif (os.path.isdir(fastq)):
-      files = os.listdir(fastq)
-      fastqRx = re.compile("(\.fastq$)|(\.fq$)")
-      fastqZRx = re.compile("(\.fastq.gz$)|(\.fq.gz$)")
-      fastqNative = len(list(filter(fastqRx.search, files)))
-      fastqCompre = len(list(filter(fastqZRx.search, files)))
-      if (fastqNative>=fastqCompre):
-        shell("cat "+ " ".join([fastq + os.path.sep + x for x in list(filter(fastqRx.search, files))])+""" | minimap2 -2 -a -x map-ont --MD -R '@RG\\tID:{params.rg}\\tSM:{params.rg}' -t 8 {input.ref} - | samtools view -@ 4 -F 0x4 -O BAM -U {output.ubam} | samtools sort -@ 4 > {output.bam}""")
-      else:
-        shell("gunzip -c "+ " ".join([fastq + os.path.sep + x for x in list(filter(fastqZRx.search, files))])+""" | minimap2 -2 -a -x map-ont --MD -R '@RG\tID:{params.rg}\tSM:{params.rg}' -t 8 {input.ref} - | samtools view -@ 4 -F 0x4 -O BAM -U {output.ubam} | samtools sort -@ 4 > {output.bam}""")      
+    rg = config["pipeline"],
+    fap = fastqAccessParam
+  shell:
+    """{params.fap} | minimap2 -2 -a -x map-ont --MD -R '@RG\\tID:{params.rg}\\tSM:{params.rg}' -t 8 {input.ref} - | samtools view -@ 4 -F 0x4 -O BAM -U {output.ubam} | samtools sort -@ 4 > {output.bam}"""
 
 
 # build BAM index
@@ -126,14 +120,51 @@ rule Rpreprocess:
     bai = "Analysis/Minimap2/"+fastqTarget+".bam.bai",
     uqual = "Analysis/Minimap2/"+fastqTarget+".unmapped.quals"
   output:
-    rout = "Analysis/R/"+fastqTarget+"_mapping_results.Rdata"
+    rout = "Analysis/R/"+fastqTarget+"_mapping_results.Rdata",
+    targets = expand("Analysis/OnTarget/{target}.mappedreads", target=TARGETS),
+    offtargets = "Analysis/OnTarget/OffTarget.mappedreads"
   shell:
     "Rscript harvest.R"
     
+# filter the starting fastq for ontarget reads
+rule onTargetReadDump:
+  input:
+    rin = "Analysis/R/"+fastqTarget+"_mapping_results.Rdata", # not actually used; for method chaining only
+    readIds = "Analysis/OnTarget/{target}.mappedreads"
+  output:
+    fastq = "Analysis/OnTarget/{target}.fastq"
+  params:
+    fap = fastqAccessParam
+  shell:
+    "{params.fap} | seqtk subseq - {input.readIds} > {output.fastq}"
+
+# filter the starting fastq for the offtarget reads
+rule offTargetReadDump:
+  input:
+    rin = "Analysis/R/"+fastqTarget+"_mapping_results.Rdata", # not actually used; for method chaining only
+    readIds = "Analysis/OnTarget/OffTarget.mappedreads"
+  output:
+    fastq = "Analysis/OnTarget/OffTarget.fastq"
+  params:
+    fap = fastqAccessParam
+  shell:
+    "{params.fap} | seqtk subseq - {input.readIds} > {output.fastq}"
+
+
+# render the report ...
+rule renderTheReport:
+  input:
+    rin = "Analysis/R/"+fastqTarget+"_mapping_results.Rdata",
+    fastq = "Analysis/OnTarget/{target}.fastq",
+    ofastq = "Analysis/OnTarget/OffTarget.fastq"
+  output:
+    "ont_tutorial_cas9.html"
+  shell:
+    "R --slave -e 'rmarkdown::render("ont_tutorial_cas9.Rmd", "html_document")'"
+
 
 rule all:
   input:
-    ReferenceGenome,
-    "Analysis/Minimap2/"+fastqTarget+".bam.bai",
-    "Analysis/Minimap2/"+fastqTarget+".unmapped.quals",
-    "Analysis/R/"+fastqTarget+"_mapping_results.Rdata"
+    expand("Analysis/OnTarget/{target}.fastq", target=TARGETS),
+    "Analysis/OnTarget/OffTarget.fastq",
+    "ont_tutorial_cas9.html"
