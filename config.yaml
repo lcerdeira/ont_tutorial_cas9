@@ -9,7 +9,7 @@ study_name: "cas9_FAK76554"
 reference_genome: "http://ftp.ensembl.org/pub/release-96/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz"
 
 # bed file describing the target regions 
-target_regions: "RawData/enrichment_targets.bed"
+target_regions: "RawData/repeatpanel.bed"
 
 # fastq sequences to be mapped placed in a folder
 fastq: "RawData/DoubleCut/20190502_1617_GA30000_FAK76554_5a42db91/fastq_pass"
@@ -19,6 +19,8 @@ fastq: "RawData/DoubleCut/20190502_1617_GA30000_FAK76554_5a42db91/fastq_pass"
 # gstride is the bin size for summarising depth of coverage across the reference_genome
 gstride: 100
 # target_proximity is the distance up- and down-stream of ontarget BED for defining target proximal mapping
-target_proximity: 10000
+target_proximity: 25000
 # a threshold for defining off-target mapping; this is ($level$ * mean background) expression
 offtarget_level: 20
+
+tutorialText: TRUE

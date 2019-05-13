@@ -12,6 +12,7 @@ reference <- config$reference_genome
 gstride <- as.integer(config$gstride)
 target_proximity <- as.integer(config$target_proximity)
 offtarget_level <- as.integer(config$offtarget_level)
+max_threads <- 8
 
 r_results <- file.path("Analysis","R")
 on_target <- file.path("Analysis","OnTarget")
@@ -74,6 +75,7 @@ harvestUnmapped <- function(qualfilelocation, chunk.size=100000, force=FALSE) {
 ####################
 # load the reference genome
 ####################
+cat(paste0("loading reference genome data", "\n"))
 referenceGenome.file <- file.path("Analysis", "ReferenceGenome", gsub("(\\.zip)|(\\.bz2)|(\\.gz)", "", basename(reference)))
 loadReferenceGenome()
 # for the tutorial we are stripping out the non-primary chromosome chunks ... - in current human genome anything with a dot in name
@@ -84,6 +86,7 @@ referenceGenome <- referenceGenome[-grep("\\.", referenceGenome[,1]),]
 ####################
 # identify the project BAM files
 ####################
+cat(paste0("finding BAM files and loading unmapped reads", "\n"))
 mappedBam <- file.path("Analysis","Minimap2", paste0(study, ".bam"))
 unmappedBam = file.path("Analysis","Minimap2", paste0(study, ".unmapped.quals"))
 # and parse the unmapped content
@@ -94,6 +97,7 @@ unmappedReads <- harvestUnmapped(unmappedBam)
 # load the bed file
 # define what is ontarget, targetproximal and background
 ####################
+cat(paste0("loading BED files and scoring coordinates", "\n"))
 bed <- data.table::fread(file=bed_src)
 # create a genomic ranges object for the bed file elements
 br <- GRanges(seqnames=unlist(bed[,1]), IRanges(start=unlist(bed[,2]), end=unlist(bed[,3])))
@@ -111,19 +115,22 @@ names(br) <- unlist(bed[,4])
 # load the BAM file into memory; parse depths of coverage
 # STRIDE from YAML; 
 ####################
+cat(paste0("loading BAM files", "\n"))
 seqlengths(gr) <- width(referenceGenomeSequence[getStringSetId(names(seqlengths(gr)))])
+cat(paste0("primary mappings", "\n"))
 params=ScanBamParam(which=gr,
                     what=c("mapq", "qual", "qname"), 
                     tag=c("NM"),
                     flag=scanBamFlag(isSupplementaryAlignment=FALSE, isSecondaryAlignment=FALSE))  
 wga <- readGAlignments(file=mappedBam, param=params)
-
-wgaSecondary <- readGAlignments(file=mappedBam, 
-                                param=ScanBamParam(which=gr, 
-                                                   flag=scanBamFlag(isSupplementaryAlignment=FALSE, isSecondaryAlignment=TRUE)))
-wgaSupplementary <- readGAlignments(file=mappedBam, 
-                                    param=ScanBamParam(which=gr, 
-                                                       flag=scanBamFlag(isSupplementaryAlignment=TRUE, isSecondaryAlignment=FALSE)))
+# cat(paste0("secondary mappings", "\n"))
+# wgaSecondary <- readGAlignments(file=mappedBam, 
+#                                 param=ScanBamParam(which=gr,
+#                                                    flag=scanBamFlag(isSupplementaryAlignment=FALSE, isSecondaryAlignment=TRUE)))
+# cat(paste0("supplementary mappings", "\n"))
+# wgaSupplementary <- readGAlignments(file=mappedBam, 
+#                                     param=ScanBamParam(which=gr, 
+#                                                        flag=scanBamFlag(isSupplementaryAlignment=TRUE, isSecondaryAlignment=FALSE)))
 
 max.read.len <- max(width(wga))
 wgac <- coverage(wga)
@@ -137,6 +144,7 @@ wgaba.all <- binnedAverage(bins, wgac, "binned_cov")
 # look for peaks of potential off-target; threshold from YAML
 ####################
 # strip out on target and flanking regions ...
+cat(paste0("hunting off target mappings", "\n"))
 wgaba <- wgaba.all[-queryHits(findOverlaps(wgaba.all, br))]
 wgaba <- wgaba[-queryHits(findOverlaps(wgaba, fr))]
 wga.cov <- mean(wgaba$binned_cov) # calculate mean background coverage
@@ -152,6 +160,7 @@ backgroundR <- wgaba[-queryHits(findOverlaps(wgaba, offR))]
 # this is available in other tutorials
 # selecting simpler names for the objects; they will be reused ...
 ####################
+cat(paste0("preparing mapping characteristics", "\n"))
 backgroundUniverse <- GenomicRanges::reduce(backgroundR)
 offtargetUniverse <- GenomicRanges::reduce(offR)
 ontargetUniverse <- GenomicRanges::reduce(br)
@@ -171,18 +180,11 @@ getStartStrand <- function(x, gdata) {
   c2 <- c1[start(c1)>=start(nd)]
   c3 <- c1[end(c1)<=end(nd)]
   
-  sc0 <- wgaSecondary[seqnames(wgaSecondary)==as.character(seqnames(nd))]
-  sc1 <- sc0[subjectHits(findOverlaps(nd, granges(sc0)))]
-  sc2 <- sc1[start(sc1)>=start(nd)]
-  
-  sp0 <- wgaSupplementary[seqnames(wgaSupplementary)==as.character(seqnames(nd))]
-  sp1 <- sp0[subjectHits(findOverlaps(nd, granges(sp0)))]
-  sp2 <- sp1[start(sp1)>=start(nd)]
-  
   seqlevels(c1) <- unique(as.character(seqnames(c1)))
   seqnames(c1) <- factor(seqnames(c1))
   cov <- GenomicAlignments::coverage(c1, shift=-start(nd), width=width(nd))
   depths <- rep(as.integer(unlist(runValue(cov))), as.integer(unlist(runLength(cov))))
+  
   qdata <- quantile(depths)
   
   lf <- letterFrequency(subseq(referenceGenomeSequence[[getStringSetId(seqnames(nd))]], start(nd), end(nd)), c("G", "C", "N"))
@@ -210,16 +212,12 @@ getStartStrand <- function(x, gdata) {
   cigardel <- sum(sum(width(cigarRangesAlongPairwiseSpace(cigar(c2), ops=c("D")))))
   cigarins <- sum(sum(width(cigarRangesAlongPairwiseSpace(cigar(c2), ops=c("I")))))
   cigarmapped <- sum(cigarWidthAlongQuerySpace(cigar(c2), after.soft.clipping=TRUE))
-  isseccount <- length(sc2)
-  issecbases <- sum(qwidth(sc2))
-  issuppcount <- length(sp2)
-  issuppbases <- sum(qwidth(sp2))
-  return(c(rstart, basesstart, meanreadlen, startreadlen, endreadlen, strandp, strandn, gccount, ncount, mapq, map0, readq, read0, d005, d025, d050, d075, d095, dmean, nm, cigardel, cigarins, cigarmapped, isseccount, issecbases, issuppcount, issuppbases))
+  return(c(rstart, basesstart, meanreadlen, startreadlen, endreadlen, strandp, strandn, gccount, ncount, mapq, map0, readq, read0, d005, d025, d050, d075, d095, dmean, nm, cigardel, cigarins, cigarmapped))
 }
 
 
 bamMineUniverse <- function(universe) {
-  startStrand <-matrix(unlist(pbmclapply(seq_along(seqnames(universe)), getStartStrand, gdata=universe, mc.cores=min(detectCores()-1,8))), ncol=27, byrow=TRUE)
+  startStrand <-matrix(unlist(pbmclapply(seq_along(seqnames(universe)), getStartStrand, gdata=universe, mc.cores=min(detectCores()-1, max_threads))), ncol=23, byrow=TRUE)
   universe$rstart <- startStrand[,1]
   universe$basesstart <- startStrand[,2]
   universe$meanreadlen <- startStrand[,3]
@@ -243,10 +241,6 @@ bamMineUniverse <- function(universe) {
   universe$cigardel <- startStrand[,21]
   universe$cigarins <- startStrand[,22]
   universe$cigarmapped <- startStrand[,23]
-  universe$isseccount <- startStrand[,24]
-  universe$issecbases <- startStrand[,25]
-  universe$issuppcount <- startStrand[,26]
-  universe$issuppbases <- startStrand[,27]
   return(universe)
 }
 
@@ -254,9 +248,13 @@ bamMineUniverse <- function(universe) {
 ####################
 # and apply the function to the mapping universe types ...
 ####################
+cat(paste0("background", "\n"))
 backgroundUniverse <- bamMineUniverse(backgroundUniverse)
+cat(paste0("offtarget", "\n"))
 offtargetUniverse <- bamMineUniverse(offtargetUniverse)
+cat(paste0("ontarget", "\n"))
 ontargetUniverse <- bamMineUniverse(ontargetUniverse)
+cat(paste0("target proximal", "\n"))
 targetproximalUniverse <- bamMineUniverse(targetproximalUniverse)
 
 
@@ -264,25 +262,31 @@ targetproximalUniverse <- bamMineUniverse(targetproximalUniverse)
 # and save the data in a file for import into the report ...
 ####################
 mappingResultsFile <- file.path(r_results, paste0(study, "_mapping_results", ".Rdata"))
-save(br, backgroundUniverse, offtargetUniverse, ontargetUniverse, targetproximalUniverse, file=mappingResultsFile)
+save(br, wga.cov, backgroundUniverse, offtargetUniverse, ontargetUniverse, targetproximalUniverse, file=mappingResultsFile)
 
 ####################
 # create the finer resolution aggregate data for the discrete target regions ...
 ####################
-aggregateDepthInfo <- function(x, xr, geneId=NA) {
+aggregateDepthInfo <- function(x, xr, ontarget=FALSE, geneId=NA) {
   targetRegion <- xr[x]
+  proximalRegion <- targetRegion
+  if (ontarget) {
+    start(proximalRegion) <- max(start(proximalRegion) - target_proximity, 1)
+    end(proximalRegion) <- end(proximalRegion) + target_proximity
+  }
   if (is.na(geneId)) { 
     geneId <- names(targetRegion) 
   }
   cat(paste0("geneId:", geneId, "\n"))
   
   c0 <- wga[seqnames(wga)==as.character(seqnames(targetRegion))]
-  c1 <- c0[subjectHits(findOverlaps(targetRegion, granges(c0)))]
+  c1 <- c0[subjectHits(findOverlaps(proximalRegion, granges(c0)))]
+  c2 <- c0[subjectHits(findOverlaps(targetRegion, granges(c0)))]
   seqlevels(c1) <- unique(as.character(seqnames(c1)))
   seqnames(c1) <- factor(seqnames(c1))
-  cov <- GenomicAlignments::coverage(c1, shift=-start(targetRegion), width=width(targetRegion))
+  cov <- GenomicAlignments::coverage(c1, shift=-start(proximalRegion), width=width(proximalRegion))
 
-  seqlen <- width(targetRegion)
+  seqlen <- width(proximalRegion)
   names(seqlen)<-as.character(seqnames(targetRegion))
   bins <- GenomicRanges::tileGenome(seqlengths=seqlen, tilewidth=10, cut.last.tile.in.chrom=TRUE)
   ba <- binnedAverage(bins, cov, "binned_cov")
@@ -296,19 +300,19 @@ aggregateDepthInfo <- function(x, xr, geneId=NA) {
   ba$gene <- geneId
   
   # calculate the coverage of reads on fwd strand for directionality plotting
-  fcov <- GenomicAlignments::coverage(c1[which(strand(c1)=="+")], shift=-start(targetRegion), width=width(targetRegion))
+  fcov <- GenomicAlignments::coverage(c1[which(strand(c1)=="+")], shift=-start(proximalRegion), width=width(proximalRegion))
   ba$fwd_cov <- mcols(binnedAverage(bins, fcov, "fwd_cov"))$fwd_cov
   
   # write the target sequences to file ...
-  write(mcols(c1)$qname, file.path(on_target, paste0(geneId, ".mappedreads")), append=TRUE)
+  write(mcols(c2)$qname, file.path(on_target, paste0(geneId, ".mappedreads")), append=TRUE)
   
   return(as.data.frame(ba))
 }
   
 
 
-
-aggregatedCov <- bind_rows(pbmclapply(seq_along(ontargetUniverse), aggregateDepthInfo, xr=ontargetUniverse, mc.cores=min(detectCores()-1,8)), .id = "column_label")
+cat(paste0("scoring data per target region", "\n"))
+aggregatedCov <- bind_rows(pbmclapply(seq_along(ontargetUniverse), aggregateDepthInfo, xr=ontargetUniverse, ontarget=TRUE, mc.cores=min(detectCores()-1, max_threads)), .id = "column_label")
 aggregatedCovFile <- file.path(r_results, paste0(study, "_aggregated_coverage", ".Rdata"))
 
 aggregatedGR <- GenomicRanges::makeGRangesFromDataFrame(aggregatedCov[,-1], keep.extra.columns = TRUE)

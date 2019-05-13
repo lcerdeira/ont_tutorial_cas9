@@ -28,10 +28,10 @@ TARGETS = list(df[df.columns[3]])
 # decide how we will be accessing the FASTQ files ...
 fastqAccessParam = ""
 if (os.path.isfile(fastq) and re.search("(.gz$)|(.gzip$)", fastq) is not None): # compressed input -file-
-  print("InputFastq is compressed file")
+  #print("InputFastq is compressed file")
   fastqAccessParam = "gunzip -c "+fastq
 elif (os.path.isfile(fastq) and re.search("(.gz$)|(.gzip$)", fastq) is None): # uncompressed fastq -file-
-  print("InputFastq is uncompressed file")
+  #print("InputFastq is uncompressed file")
   fastqAccessParam = "cat "+fastq
 elif (os.path.isdir(fastq)):
   files = os.listdir(fastq)
@@ -40,12 +40,12 @@ elif (os.path.isdir(fastq)):
   fastqNative = len(list(filter(fastqRx.search, files)))
   fastqCompre = len(list(filter(fastqZRx.search, files)))
   if (fastqNative>=fastqCompre):
-    print("InputFastq is set of uncompressed file*s*")
+    #print("InputFastq is set of uncompressed file*s*")
     fastqAccessParam = "cat "+ " ".join([fastq + os.path.sep + x for x in list(filter(fastqRx.search, files))])
   else:
-    print("InputFastq is set of compressed file*s*")
+    #print("InputFastq is set of compressed file*s*")
     fastqAccessParam = "gunzip -c "+ " ".join([fastq + os.path.sep + x for x in list(filter(fastqRx.search, files))])
-print(fastqAccessParam)
+#print(fastqAccessParam)
 
 
 """
@@ -154,13 +154,11 @@ rule offTargetReadDump:
 # render the report ...
 rule renderTheReport:
   input:
-    rin = "Analysis/R/"+fastqTarget+"_mapping_results.Rdata",
-    fastq = "Analysis/OnTarget/{target}.fastq",
-    ofastq = "Analysis/OnTarget/OffTarget.fastq"
+    rin = "Analysis/R/"+fastqTarget+"_mapping_results.Rdata"
   output:
     "ont_tutorial_cas9.html"
   shell:
-    "R --slave -e 'rmarkdown::render("ont_tutorial_cas9.Rmd", "html_document")'"
+    """R --slave -e 'rmarkdown::render("ont_tutorial_cas9.Rmd", "html_document")'"""
 
 
 rule all:
