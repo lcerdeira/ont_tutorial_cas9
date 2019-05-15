@@ -21,7 +21,7 @@ always_allow_html: yes
 ---
 
 <div style="position:absolute;top:0px;right:0px;padding:15px;background-color:gray;width:45%;">
-```{r, echo=FALSE}
+```{r, echo=FALSE, eval=FALSE}
 knitr::include_graphics("https://nanoporetech.com/themes/custom/nanopore/images/ont-logo.svg?tutorial=cas9enrichment")
 ```
 </div>
@@ -49,6 +49,8 @@ library(reshape2)
 library(parallel)
 library(GenomicAlignments)
 library(dplyr)
+library(emojifont)
+library(ggbio)
 
 config <- yaml.load_file("config.yaml")
 bed_src <- config$target_regions
@@ -68,6 +70,8 @@ slurpContent <- function(filename) {
     paste(readLines(filename),collapse="\n")
   }
 }
+
+reportDPI <- 90
 ```
 
 
@@ -92,6 +96,10 @@ load(aggregatedCovFile)
 qualfilelocation = file.path("Analysis","Minimap2", paste0(study, ".unmapped.quals"))
 chromosomeFile <- file.path(r_results, paste(sub("\\.[^.]*$", "", basename(qualfilelocation)), "rcounts", "Rdata",sep="."))
 unmappedReads <- readRDS(file=chromosomeFile)
+
+phredmean <- function(l) {
+  -10 * log10(mean(10^(l/-10)))
+}
 ```
 
 
@@ -107,6 +115,57 @@ The first step for the analysis of the Cas9 enrichment strategy is to assess the
 * The **`Off Target`** regions are defined as the subset of the background genome that has a depth-of-coverage of > **`r as.integer(config$offtarget_level)`**.
 
 Target regions are calculated using the genome coordinates from the provided reference genome (`r basename(reference)`) and the **R** **`GenomicRanges`** package is used to select for the coordinates that correspond to OnTarget, TargetFlanking and OffTarget regions. The genome reference sequence and mapped reads are assessed for a number of metrics that could be used to assess the performance of the target capture. This BAM parsing analysis utilises both the **`GenomicRanges`** coordinate handling package and the **`Rsamtools`** package for the parsing and exploration of BAM files.
+
+
+# Executive Summary
+
+
+```{r seqInfoPlot, include=TRUE, echo=FALSE, fig.fullwidth = TRUE, dpi=360, fig.width=9, fig.height=2}
+
+figures <- 4
+
+cas9Throughput <- sum(backgroundUniverse$basesstart) + sum(unmappedReads$width) + 
+  sum(offtargetUniverse$basesstart) + 
+  sum(targetproximalUniverse$basesstart) + 
+  sum(ontargetUniverse$basesstart)
+cas9Throughput <- paste(round(cas9Throughput / 1e9, digits=2), "Gb")
+    
+#ontargetLabel <- paste(round(sum(ontargetUniverse$basesstart) / (sum(backgroundUniverse$basesstart) + sum(unmappedReads$width) + sum(offtargetUniverse$basesstart) + sum(targetproximalUniverse$basesstart) + sum(ontargetUniverse$basesstart)) * 100, 2), "%")
+ontargetLabel <- paste0(round(sum(ontargetUniverse$rstart) / (sum(ontargetUniverse$rstart) + length(unmappedReads) + sum(offtargetUniverse$rstart) + sum(targetproximalUniverse$rstart) + sum(backgroundUniverse$rstart)) * 100, digits=2), "%")
+meanCovLabel <- paste0(round(mean(rep(ontargetUniverse$dmean, width(ontargetUniverse))), digits=1), "X")
+
+depletionLabel = paste0(round(Hmisc::wtd.quantile(ontargetUniverse$dmean, probs=c(0.5), weight=width(ontargetUniverse)) / Hmisc::wtd.quantile(as.numeric(backgroundUniverse$dmean), probs=c(0.5), weight=as.numeric(width(backgroundUniverse))), digits=1), " X")
+
+df <- data.frame(
+    x = cumsum(c(2, rep(6.5, figures-1))),
+    y = rep(2, figures),
+    h = rep(4, figures),
+    w = rep(6, figures))
+
+    df$info <- c(cas9Throughput, ontargetLabel, meanCovLabel, depletionLabel)
+    df$key <- c("Throughput", "reads on target", "mean target coverage", "non-target depletion")
+    df$icon <- fontawesome(c("fa-calculator", "fa-cut", "fa-map", "fa-code-fork"))
+
+    df$colour <- rep("steelblue", figures)
+
+ReadCharacteristicsValueBoxes <- ggplot(df, aes(x, y, height = h, width = w, label = key, fill = colour)) +
+    geom_tile(fill = brewer.pal(9,"Blues")[7]) +
+    geom_text(color = brewer.pal(9,"Blues")[3], hjust="left", nudge_y=-1.5, nudge_x=-2.6, size=3.5) +
+    geom_text(label=df$icon, family='fontawesome-webfont', colour=brewer.pal(9,"Blues")[5], size=14, hjust="right", nudge_x=2.85, nudge_y=0.9) +
+    geom_text(label=df$info, size=9, color = brewer.pal(9,"Blues")[2], fontface = "bold", nudge_x=-2.6, hjust="left") +
+    coord_fixed() + 
+    scale_fill_brewer(type = "qual",palette = "Dark2") +
+    theme_void() +
+    guides(fill = F)
+
+
+
+ggplot2::ggsave(file.path(r_results, "EnrichmentValueBoxesA.png"), plot=ReadCharacteristicsValueBoxes, device="png", units="cm", width=25, height=5, dpi=reportDPI)
+
+knitr::include_graphics(file.path(r_results, "EnrichmentValueBoxesA.png"))
+
+```
+
 
 
 ```{r summaryStatistics, echo=FALSE, results="asis", eval=TRUE}
@@ -126,54 +185,18 @@ collateMappingCharacteristics <- function(bamFile, unmappedBamFile=NA) {
   unmappedNts <- sum(unmappedBamFile$width)
   fastqNts <- mappedNts + unmappedNts
   mappedClippedNts <- sum(bamFile$cigarmapped)
-  # basic counts for read lengths
-  mappedLength <- mean(rep(bamFile$meanreadlen, bamFile$rstart))
-  unmappedLength <- mean(unmappedBamFile$width)
-  # basic counts for quality scores
-  mappedQuality <- mean(rep(bamFile$readq, bamFile$rstart))
-  unmappedQuality <- mean(unmappedBamFile$quality)
-  
-  # mapping details ...
-  mismatches <- sum(bamFile$nm)
-  insertions <- sum(bamFile$cigarins)
-  deletions <- sum(bamFile$cigardel)
-  meanMapQ <- mean(bamFile$mapq, na.rm=TRUE)
   
   # reference genome characteristics
-  refSize <- sum(width(bamFile))
-  Ncount <- sum(bamFile$ncount)/sum(width(bamFile))*100
-  GCcount <- sum(bamFile$gccount)/sum(width(bamFile))*100
-  chromosomeCount <- length(unique(as.character(seqnames(bamFile))))
-  meanCov <- sum(bamFile$dmean * width(bamFile), na.rm=TRUE) / sum(width(bamFile), na.rm=TRUE)
+  refSize <- paste0(round(sum(as.numeric(width(bamFile))) / effectiveGenomeSize * 100, digits=3),"%")
 
+  meanCov <- sum(bamFile$dmean * width(bamFile), na.rm=TRUE) / sum(width(bamFile), na.rm=TRUE)
   
   summary.df <- data.frame(metric=character(), count=character(), percentage=character(), stringsAsFactors = FALSE)
   summary.df <- addRow(summary.df, "total sequence reads", scales::comma_format()(totalReads))
-  summary.df <- addRow(summary.df, "mapped reads (primary)", scales::comma_format()(mappedSeqs), 
-                                       paste(round(mappedSeqs / totalReads * 100, digits=2),"%", sep=""))
-  summary.df <- addRow(summary.df, "unmapped reads", scales::comma_format()(unmappedSq), 
-                                       paste(round(unmappedSq / totalReads * 100, digits=2),"%", sep=""))
-  
-  summary.df <- addRow(summary.df, "total fastq nucleotides", scales::comma_format()(fastqNts))
-  summary.df <- addRow(summary.df, "sum of nucleotides from mapped reads", scales::comma_format()(mappedNts), 
-                                       paste(round(mappedNts / fastqNts * 100, digits=2),"%", sep=""))
-  summary.df <- addRow(summary.df, ".....nucleotides from clipped mapping", scales::comma_format()(mappedClippedNts), 
-                                       paste(round(mappedClippedNts / fastqNts * 100, digits=2),"%", sep=""))
-  summary.df <- addRow(summary.df, "unmapped nucleotides", scales::comma_format()(unmappedNts), 
-                                       paste(round(unmappedNts / fastqNts * 100, digits=2),"%", sep=""))
-  
-  summary.df <- addRow(summary.df, "mean read length (mapped)", scales::comma_format()(mappedLength))
-  summary.df <- addRow(summary.df, "mean read length (unmapped)", scales::comma_format()(unmappedLength))
-  
-  summary.df <- addRow(summary.df, "mean read quality (mapped)", round(mappedQuality, digits=2))
-  summary.df <- addRow(summary.df, "mean read quality (unmapped)", round(unmappedQuality, digits=2))
-  
-  summary.df <- addRow(summary.df, "mean mapping quality (primary)", round(meanMapQ, digits=2))
-  
-  summary.df <- addRow(summary.df, "Chromosome Count", chromosomeCount)
-  summary.df <- addRow(summary.df, "Reference size (nt)", scales::comma_format()(refSize))
-  summary.df <- addRow(summary.df, "N count", paste(round(Ncount, digits=2),"%"))
-  summary.df <- addRow(summary.df, "GC count", paste(round(GCcount, digits=2),"%"))
+  summary.df <- addRow(summary.df, "mapped reads (primary)", scales::comma_format()(mappedSeqs))
+  summary.df <- addRow(summary.df, "bases sequenced", scales::comma_format()(fastqNts))
+  summary.df <- addRow(summary.df, "bases mapped", scales::comma_format()(mappedNts))
+  summary.df <- addRow(summary.df, "Fraction of genome (%)", refSize)
   summary.df <- addRow(summary.df, "Mean coverage (primary)", round(meanCov, digits=2))
   
   rownames(summary.df) <- summary.df[,1]
@@ -181,52 +204,54 @@ collateMappingCharacteristics <- function(bamFile, unmappedBamFile=NA) {
   return(summary.df)
 }
 
-summary.df <- cbind(collateMappingCharacteristics(backgroundUniverse, unmappedReads), 
+effectiveGenomeSize <- sum(width(backgroundUniverse)) + sum(width(offtargetUniverse)) + sum(width(targetproximalUniverse)) + sum(width(ontargetUniverse))
+
+summary.df <- as.data.frame(cbind(collateMappingCharacteristics(backgroundUniverse, unmappedReads), 
                     collateMappingCharacteristics(offtargetUniverse),
                     collateMappingCharacteristics(targetproximalUniverse),
-                    collateMappingCharacteristics(ontargetUniverse))
-summary.df <- summary.df[, -c(2,4,6,8)]
+                    collateMappingCharacteristics(ontargetUniverse)))
+
+summary.df <- summary.df[,-c(2,4,6,8)]
 summary.df[summary.df == "NaN"] <- ""
 
 
-row.names(summary.df)[5]<- paste0(row.names(summary.df)[5], footnote_marker_symbol(1, "html"))
-row.names(summary.df)[6]<- paste0(row.names(summary.df)[6], footnote_marker_symbol(2, "html"))
-row.names(summary.df)[13]<- paste0(row.names(summary.df)[13], footnote_marker_symbol(3, "html"))
-row.names(summary.df)[16]<- paste0(row.names(summary.df)[16], footnote_marker_symbol(4, "html"))
-row.names(summary.df)[17]<- paste0(row.names(summary.df)[17], footnote_marker_symbol(5, "html"))
+row.names(summary.df)[1]<- paste0(row.names(summary.df)[1], footnote_marker_symbol(1, "html"))
+row.names(summary.df)[2]<- paste0(row.names(summary.df)[2], footnote_marker_symbol(2, "html"))
+row.names(summary.df)[6]<- paste0(row.names(summary.df)[6], footnote_marker_symbol(3, "html"))
+#row.names(summary.df)[16]<- paste0(row.names(summary.df)[16], footnote_marker_symbol(4, "html"))
+#row.names(summary.df)[17]<- paste0(row.names(summary.df)[17], footnote_marker_symbol(5, "html"))
 
 kable(summary.df, format="html", col.names=rep(" ", ncol(summary.df)), caption="Table summarising global mapping characteristics ranked by on-target, target-flanking and off-target", booktabs=TRUE, table.envir='table*', linesep="", escape = FALSE)  %>%
   add_header_above(c(" ", "Background"=1,"Off-Target"=1,"Target-flanking"=1,"On-Target"=1)) %>%
   kable_styling(c("striped", "condensed")) %>%
-  pack_rows("Nucleotides mapped", 4, 7) %>%
-  pack_rows("Sequence length characteristics (nt)", 8, 9) %>%
-  pack_rows("Sequence quality characteristics (phred Qval)", 10, 12) %>%
-  pack_rows("Reference genome characteristics", 13, 17) %>%
-  footnote(symbol=c("fastq bases are calculated from the qwidth field of the mapped sequences and from the sequence length of unmapped sequences","clipped mapping calculated from CIGARquery coordinates", "standard workflow attempts to remove the mitochondrial chromosome and other accessory chromosomes", "The GC content is calculated as % of GC at positions where nucleotide is A/C/G/T", "depth of coverage based only on primary mapping reads"), symbol_title="please note: ", footnote_as_chunk = TRUE)
+  footnote(symbol=c("fastq bases are calculated from the qwidth field of the mapped sequences and from the sequence length of unmapped sequences", "this table presents only primary sequence mappings", "depth of coverage based only on primary mapping reads"), symbol_title="please note: ", footnote_as_chunk = TRUE)
 
 
 ```
 
 
+
+# Evaluation of reads that map to defined targets
+
 The next step in the analysis involves looking for the mapping characteristics for each of the targets specified within the BAM file. For brevity, only the most salient metrics are reported here (values such as the number of reads, the number of bases and mapping qualities), there are other values within the data (please check the **`brRes`** object).
 
 ```{r, echo=FALSE, results="asis", eval=TRUE}
-bygene <- cbind(names(ontargetUniverse), as.character(seqnames(ontargetUniverse)), scales::comma_format()(ontargetUniverse$rstart), scales::comma_format()(ontargetUniverse$basesstart), scales::comma_format()(round(ontargetUniverse$meanreadlen, digits=2)), round(ontargetUniverse$readq, digits=2), round(ontargetUniverse$mapq, digits=2), round(ontargetUniverse$dmean, digits=2), round(ontargetUniverse$strandp / ontargetUniverse$rstart*100, digits=2))
+bygene <- cbind(names(ontargetUniverse), scales::comma_format()(width(ontargetUniverse)), round(ontargetUniverse$dmean, digits=2),  scales::comma_format()(ontargetUniverse$rstart), scales::comma_format()(ontargetUniverse$basesstart), scales::comma_format()(round(ontargetUniverse$meanreadlen, digits=2)), round(ontargetUniverse$readq, digits=2), round(ontargetUniverse$mapq, digits=2), round(ontargetUniverse$strandp / ontargetUniverse$rstart*100, digits=2))
 colnames(bygene) <- seq(1, ncol(bygene))
 
 colnames(bygene)[1]<- paste0("Target Gene")
-colnames(bygene)[2]<- paste0("Chr.")
-colnames(bygene)[3]<- paste0("Read count", footnote_marker_symbol(1, "html"))
-colnames(bygene)[4]<- paste0("Bases", footnote_marker_symbol(2, "html"))
-colnames(bygene)[5]<- paste0("Mean readLength")
-colnames(bygene)[6]<- paste0("Mean readQuality")
-colnames(bygene)[7]<- paste0("Mean mapQuality")
-colnames(bygene)[8]<- paste0("Mean coverage")
+colnames(bygene)[2]<- paste0("Target size")
+colnames(bygene)[3]<- paste0("Mean coverage")
+colnames(bygene)[4]<- paste0("Read count", footnote_marker_symbol(1, "html"))
+colnames(bygene)[5]<- paste0("Bases", footnote_marker_symbol(2, "html"))
+colnames(bygene)[6]<- paste0("Mean readLength")
+colnames(bygene)[7]<- paste0("Mean readQuality")
+colnames(bygene)[8]<- paste0("Mean mapQuality")
 colnames(bygene)[9]<- paste0("Reads on FWD(%)", footnote_marker_symbol(3, "html"))
 
 kable(bygene, format="html", caption="Table summarising target mapping for pre-defined regions of interest", booktabs=TRUE, table.envir='table*', linesep="", escape = FALSE)  %>%
   kable_styling(c("striped", "condensed")) %>%
-  footnote(symbol=c("reads are counted as all sequence reads that originate within the defined BED target region", "bases are counted as sum of nucleotides from reads that originate within target region; some of these bases may overlap flanking region", "reads are assessed for strand of mapping; here reads on + strand are summarised as percentage of all"), symbol_title="please note: ", footnote_as_chunk = TRUE)
+  footnote(symbol=c("Reads are counted as all sequence reads where the SAM start location is located within the target interval. This does not correct for sequences on the reverse strand.", "Bases are counted as the sum of nucleotides from all reads where the SAM start location is within target region; some of these bases will overlap the flanking region", "reads are assessed for strand of mapping; here reads on + strand are summarised as percentage of all"), symbol_title="please note: ", footnote_as_chunk = TRUE)
 
 ```
 
@@ -258,7 +283,7 @@ singlePlot <- function(geneName, covData, delta=0) {
   covData <- as.data.frame(covData)
   covData <- covData[which(covData$gene==geneName),]
   offset <- covData[covData$pos==1,]$start
-  ggplot(covData)+
+  suppressWarnings(plot <- ggplot(covData)+
     geom_hline(yintercept=(wga.cov * offtarget_level), colour="#E69F00") +
     geom_line(aes(x=start,y=binned_cov), size=0.5, colour=brewer.pal(6, "Paired")[2])+
     xlab(paste("Position on chromosome",unique(covData$seqnames))) + 
@@ -267,6 +292,8 @@ singlePlot <- function(geneName, covData, delta=0) {
     geom_vline(xintercept=(offset+target_proximity), colour="red", alpha=0.4) +
     geom_vline(xintercept=(offset+(max(covData$pos)-target_proximity)), colour="red", alpha=0.4) +
     scale_x_continuous(limits = c(offset+delta, offset+max(covData$pos)-delta))
+  )
+  return(plot)
 }
 
 ```
@@ -287,8 +314,8 @@ strandedPlot <- function(geneName, covData, delta=0) {
   covData <- covData[which(covData$gene==geneName),]
   offset <- covData[covData$pos==1,]$start
   mdata <- melt(covData[,c("gene", "start", "fwd_cov", "rev_cov")], id.vars=c("gene", "start"))
-  ggplot(mdata, aes(start, value)) +
-        geom_hline(yintercept=(wga.cov * offtarget_level), colour="#E69F00") +
+  suppressWarnings(plot <- ggplot(mdata, aes(start, value)) +
+    geom_hline(yintercept=(wga.cov * offtarget_level), colour="#E69F00") +
     geom_area(aes(fill=variable))  +
     xlab(paste("Position on chromosome",unique(covData$seqnames))) + 
     ylab("Depth of Coverage (X)") + 
@@ -300,7 +327,8 @@ strandedPlot <- function(geneName, covData, delta=0) {
                       name="Strand mapped",
                          breaks=c("fwd_cov", "rev_cov"),
                          labels=c("Forward", "Reverse"))
-
+  )
+  return(plot)
 }
 ```
 
@@ -344,9 +372,45 @@ targetMelt <- melt(targetMap)
 targetMelt$variable <- factor(as.character(targetMelt$variable), c("background", "ontarget", "offtarget"))
 targetMelt$chromosome <- factor(targetMelt$chromosome, gtools:::mixedsort(unique(targetMelt$chromosome)))
 
-ggplot(targetMelt, aes(chromosome, value)) + geom_col(aes(fill=variable)) + scale_y_continuous(labels = comma) + ylab("Number of bases (nt)") + labs(title="Barchart showing number of references bases assigned as ontarget,\nofftarget or background") + scale_fill_brewer(direction=-1, palette="Spectral")
+suppressWarnings(plot <- ggplot(targetMelt, aes(chromosome, value)) + geom_col(aes(fill=variable)) + scale_y_continuous(labels = comma) + ylab("Number of bases (nt)") + labs(title="Barchart showing number of references bases assigned as ontarget,\nofftarget or background") + scale_fill_brewer(direction=-1, palette="Spectral")
+)
 # coord_cartesian(ylim =c(0,1000000))
 ```
+
+
+
+
+# Off-target mapping
+
+Having assessed on-target characteristics, it makes sense to also consider what has been mapped to depth within the broader genomic context that does not appear as a clear target.
+
+The **`ideogram`** below presents a description of the off-target mapping. Each shaded region (or bar) corresponds to an off-target region. 
+
+
+```{r, echo=FALSE, message=FALSE}
+
+seqlevels(offtargetUniverse) <- unique(gtools:::mixedsort(as.character(seqnames(offtargetUniverse))))
+
+autoplot(offtargetUniverse, layout="karyogram")
+
+```
+
+
+
+
+The coordinates for these off-target regions have been written to an accompanying CSV file that may be imported into Excel for further analysis. The top 10 regions, ranked by mean depth-of-coverage, are presented in the table below. 
+
+
+```{r, echo=FALSE}
+
+offtargtop <- as.data.frame(offtargetUniverse[order(offtargetUniverse$dmean, decreasing=TRUE)[1:10]])[,c(1,2,3,23,6,8,10,14)]
+colnames(offtargtop)[1]<-"chrId"
+offtargtop$strandp <- round(as.numeric(offtargtop$strandp)/as.numeric(offtargtop$rstart)*100, digits=2)
+kable(offtargtop, format="html", caption="Table summarising the location and characteristics for the off-target regions with the highest depth-of-coverage", booktabs=TRUE, table.envir='table*', linesep="", escape = FALSE)  %>%
+  kable_styling(c("striped", "condensed")) %>%
+  footnote(symbol=c("This table has been prepared using only read mapping information that corresponds to a primary map", "The rstart column describes the number of sequences that start within this genomic interval (using SAM start coordinate only)", "meanreadLen is the mean sequence read length for the rstart genes identified; their strandedness is summarised in strandp (the number of sequences that appear on the forward strand) and the mapping quality is summarised in mapq", "dmean summarised the mean depth of coverage across the sequenced interval"), symbol_title="please note: ", footnote_as_chunk = TRUE)
+```
+
 
 
 # Reproducible research - produce your own report

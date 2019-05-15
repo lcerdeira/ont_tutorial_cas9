@@ -39,6 +39,17 @@ getStringSetId <- function(chrId) {
   return(referenceGenome[match(as.character(chrId), as.character(referenceGenome[,1])),"sid"])
 }
 
+phredmean <- function(l) {
+  -10 * log10(mean(10^(l/-10)))
+}
+
+qualToMeanQ <- function(qstr) {
+  baseq <- as.numeric(charToRaw(qstr))-33
+  meanerror <- mean(10^(baseq/-10))
+  -10*log10(meanerror)
+}
+
+
 harvestUnmapped <- function(qualfilelocation, chunk.size=100000, force=FALSE) {
   # time samtools view -@ 5 -f 0x4 -O BAM clive_ngmlr.samtools.bam > unmapped.bam
   # samtools view -@ 5 -O sam unmapped.bam | awk '{print $11}' > unmapped.quals
@@ -58,7 +69,7 @@ harvestUnmapped <- function(qualfilelocation, chunk.size=100000, force=FALSE) {
     cat(paste("iter", offset, "\n"))
     qual.data <- data.table::fread(file=qualfilelocation, nrows=chunk.size, skip=offset, sep="\n", col.names=c("qual"))
     width <- nchar(qual.data$qual)
-    meanQ <- alphabetScore(FastqQuality(qual.data$qual)) / width
+    meanQ <- unlist(lapply(qual.data$qual, qualToMeanQ))
     unmapped.content <- rbind(unmapped.content, data.frame(width=width, quality=meanQ))
     if (nrow(qual.data) < chunk.size) {
       break
@@ -172,13 +183,23 @@ names(ontargetUniverse) <- names(br)
 ####################
 # big ugly BAM parsing function; dive across a GRange
 ####################
+
+
 getStartStrand <- function(x, gdata) {
   nd <- gdata[x]
   # how to perform a fast reduction on data size - filter by chromosome
   c0 <- wga[seqnames(wga)==as.character(seqnames(nd))]
   c1 <- c0[subjectHits(findOverlaps(nd, granges(c0)))]
-  c2 <- c1[start(c1)>=start(nd)]
-  c3 <- c1[end(c1)<=end(nd)]
+  
+  #startF <- which(start(c1)>=start(nd) & strand(c1)=="+")
+  #startR <- which(end(c1)<=end(nd) & strand(c1)=="-")
+  #endF <- which(end(c1)<=endF(nd) & strand(c1)=="+")
+  #endR <- which(start(c1)>=start(nd) & strand(c1)=="-")
+  #starts <- unique(append(startF, startR))
+  #stops <-unique(append(endF, endR))  
+  
+  starts <- which(start(c1)>=start(nd))
+  c2 <- c1[starts]
   
   seqlevels(c1) <- unique(as.character(seqnames(c1)))
   seqnames(c1) <- factor(seqnames(c1))
@@ -193,15 +214,22 @@ getStartStrand <- function(x, gdata) {
   basesstart <- sum(qwidth(c2))                              # earlier basesReadsStarted
   meanreadlen <- mean(qwidth(c1))                            # see previous *readLen* - now mean for *any* overlapping read
   startreadlen <- mean(qwidth(c2))                           # what is the mean sequence length for reads that start in segment?
-  endreadlen <- mean(qwidth(c3))                             # what is the mean sequence length for reads that end in the segment?
   strandp <- length(which(strand(c1)=="+"))                  # within the interval; not linked to readStarts
   strandn <- length(which(strand(c1)=="-"))
   gccount <- lf[1]+lf[2]
   ncount <- lf[3]
-  mapq <- mean(mcols(c2)$mapq)                               # mapq for reads starting in segment
-  map0 <- mean(mcols(c1)$mapq)                               # mapq for reads overlapping segment
-  readq <- mean(alphabetScore(mcols(c2)$qual) / width(mcols(c2)$qual)) # per read q score for reads starting in segment 
-  read0 <- mean(alphabetScore(mcols(c1)$qual) / width(mcols(c1)$qual)) # per read q score for reads overlapping segment
+  #mapq <- -10 * log10(mean(10^(-mcols(c2)$mapq/10)))         # mapq for reads starting in segment
+  #map0 <- -10 * log10(mean(10^(-mcols(c1)$mapq/10)))         # mapq for reads overlapping segment
+  #readq <- -10 * log10(mean(10^(-mean(alphabetScore(mcols(c2)$qual) / width(mcols(c2)$qual))/10))) # per read q score for reads starting in segment 
+  #read0 <- -10 * log10(mean(10^(-mean(alphabetScore(mcols(c1)$qual) / width(mcols(c1)$qual))/10))) # per read q score for reads overlapping segment
+  
+  # discussion with Olle on how Qvalues are best summarised and prepared ... ShortRead alphabetScore is not ideal
+  # while alphabetScore(mcols(c2)$qual) / width(mcols(c2)$qual)) gives a number this is not scaled appropriately
+  mapq <- phredmean(mcols(c2)$mapq)
+  map0 <- phredmean(mcols(c1)$mapq)
+  readq <- phredmean(unlist(lapply(as.character(mcols(c2)$qual), qualToMeanQ)))
+  read0 <- phredmean(unlist(lapply(as.character(mcols(c1)$qual), qualToMeanQ)))
+  
   d005 <- qdata[1]
   d025 <- qdata[2]
   d050 <- qdata[3]
@@ -212,35 +240,34 @@ getStartStrand <- function(x, gdata) {
   cigardel <- sum(sum(width(cigarRangesAlongPairwiseSpace(cigar(c2), ops=c("D")))))
   cigarins <- sum(sum(width(cigarRangesAlongPairwiseSpace(cigar(c2), ops=c("I")))))
   cigarmapped <- sum(cigarWidthAlongQuerySpace(cigar(c2), after.soft.clipping=TRUE))
-  return(c(rstart, basesstart, meanreadlen, startreadlen, endreadlen, strandp, strandn, gccount, ncount, mapq, map0, readq, read0, d005, d025, d050, d075, d095, dmean, nm, cigardel, cigarins, cigarmapped))
+  return(c(rstart, basesstart, meanreadlen, startreadlen, strandp, strandn, gccount, ncount, mapq, map0, readq, read0, d005, d025, d050, d075, d095, dmean, nm, cigardel, cigarins, cigarmapped))
 }
 
 
 bamMineUniverse <- function(universe) {
-  startStrand <-matrix(unlist(pbmclapply(seq_along(seqnames(universe)), getStartStrand, gdata=universe, mc.cores=min(detectCores()-1, max_threads))), ncol=23, byrow=TRUE)
+  startStrand <-matrix(unlist(pbmclapply(seq_along(seqnames(universe)), getStartStrand, gdata=universe, mc.cores=min(detectCores()-1, max_threads))), ncol=22, byrow=TRUE)
   universe$rstart <- startStrand[,1]
   universe$basesstart <- startStrand[,2]
   universe$meanreadlen <- startStrand[,3]
   universe$startreadlen <- startStrand[,4]
-  universe$endreadlen <- startStrand[,5]
-  universe$strandp <- startStrand[,6]
-  universe$strandn <- startStrand[,7]
-  universe$gccount <- startStrand[,8]
-  universe$ncount <- startStrand[,9]
-  universe$mapq <- startStrand[,10]
-  universe$map0 <- startStrand[,11]
-  universe$readq <- startStrand[,12]
-  universe$read0 <- startStrand[,13]
-  universe$d005 <- startStrand[,14]
-  universe$d025 <- startStrand[,15]
-  universe$d050 <- startStrand[,16]
-  universe$d075 <- startStrand[,17]
-  universe$d095 <- startStrand[,18]
-  universe$dmean <- startStrand[,19]
-  universe$nm <- startStrand[,20]
-  universe$cigardel <- startStrand[,21]
-  universe$cigarins <- startStrand[,22]
-  universe$cigarmapped <- startStrand[,23]
+  universe$strandp <- startStrand[,5]
+  universe$strandn <- startStrand[,6]
+  universe$gccount <- startStrand[,7]
+  universe$ncount <- startStrand[,8]
+  universe$mapq <- startStrand[,9]
+  universe$map0 <- startStrand[,10]
+  universe$readq <- startStrand[,11]
+  universe$read0 <- startStrand[,12]
+  universe$d005 <- startStrand[,13]
+  universe$d025 <- startStrand[,14]
+  universe$d050 <- startStrand[,15]
+  universe$d075 <- startStrand[,16]
+  universe$d095 <- startStrand[,17]
+  universe$dmean <- startStrand[,18]
+  universe$nm <- startStrand[,19]
+  universe$cigardel <- startStrand[,20]
+  universe$cigarins <- startStrand[,21]
+  universe$cigarmapped <- startStrand[,22]
   return(universe)
 }
 
