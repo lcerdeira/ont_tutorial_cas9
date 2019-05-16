@@ -1,8 +1,8 @@
 # Statement of tutorial objectives
 
-The aim of this tutorial is to demonstrate a workflow for mapping long DNA sequence reads to a reference genome, and to evaluate the performance of a Cas9 based target enrichment strategy. This workflow is suitable for Oxford Nanopore fastq sequence collections but requires a reference genome and a BED file of target coordinates.
+The aim of this tutorial is to demonstrate a workflow for mapping long DNA sequence reads to a reference genome, and to evaluate the performance of a Cas9 based target enrichment strategy. This workflow is suitable for Oxford Nanopore fastq sequence collections and requires a reference genome and a BED file of target coordinates.
 
-The tutorial is packaged with example data, so that the workflow can be replicated to address questions such as
+The tutorial is packaged with example data, and the workflow can be reproduced to address questions such as
 
 * How many sequence reads map to the reference genome?
 * What is the depth of coverage for reads that map to pre-defined target regions?
@@ -10,7 +10,7 @@ The tutorial is packaged with example data, so that the workflow can be replicat
 * Is there evidence for off-target enrichment of genomic regions?
 * How has the Cas9 based target-enrichment worked for **`HTT`**, our gene of interest?
 
-Editing of the workflow's configuration file, **`config.yaml`**, will allow the workflow to be run with different DNA sequence collections, reference genomes, and with different BED files that define the regions of interest.
+Editing the workflow's configuration file, **`config.yaml`**, will allow the analyses to be run using different DNA sequence collections, reference genomes, and with different BED files that define the regions of interest.
 
 ## Methods utilised include: 
 
@@ -24,9 +24,10 @@ Editing of the workflow's configuration file, **`config.yaml`**, will allow the 
 ## The computational requirements include: 
 
 * Computer running Linux (Centos7, Ubuntu 18_10, Fedora 29)
-* At least 24 Gb RAM - this is sufficient for a single thread and can accommodate a MinION flowcell worth of sequence data
+* Multiple CPU cores are ideal; a 4 core CPU at minimum would be recommended 
+* At least 24 Gb RAM - this is sufficient for mapping against the human genome and can report a full MinION flowcell worth of sequence data
 * At least 15 Gb spare disk space for analysis and indices
-* Runtime with provided example data - approximately 20 minutes
+* Runtime with provided example data - approximately 45 minutes
 
 \pagebreak
 
@@ -62,21 +63,34 @@ Editing of the workflow's configuration file, **`config.yaml`**, will allow the 
 
 # Introduction
 
-PLEASE CAN I HAVE A COUPLE OF PARAGRAPHS THAT DESCRIBE
+Targeted DNA sequencing is an important research tool used to study genetic diversity. 
 
-1. THE REASON WHY WE HAVE A CAS9 PROTOCOL
-2. WHAT WE EXPECT A CAS9 ENRICHMENT TO DELIVER
-3. SOME OVERLAP OF THE PROTOCOL WITH PRODUCTS AND STUFF ON THE STORE
+It is often more appropriate to sequence DNA from candidate genes or panels of target regions than to sequence the whole genome. 
 
+The characterisation of target regions can be used to e.g. assess specific structural variations and single nucleotide polymorphisms.
+
+Traditional targetting strategies are reliant on PCR for the amplification from small amounts of target. This amplification step both limits the length of the individual DNA sequence reads and loses base modification information. 
+
+Longer sequence reads are critical because they can provide sufficient context to both phase genetic variants over target regions and to resolve repeat counts in repeat expansions.
+
+[Oxford Nanopore Technologies](https://nanoporetech.com) provides a [Cas-mediated PCR-free enrichment protocol](https://community.nanoporetech.com/protocols/Cas-mediated-PCR-free-enrich/) that allows users to selectively enrich for genomic regions of interest and to sequence long, single molecules of native DNA.
+
+The enrichment strategy is based the design of CRISPR RNA (crRNA) probe sequences that may flank or tile-across one or more target regions. The crRNAs program the Cas9 protein to bind and cleave DNA at sites that match the crRNA sequence. This Cas9-mediated cut of the DNA, and the production of a newly-exposed and "deprotected" DNA end is the basis of the enrichment protocol. 
+
+For an equivalent amount of sequenced library a Cas-mediated DNA enrichment will provide a higher coverage for the targeted regions than sequencing the whole genome alone. 
+
+The DNA enrichment protocol does not require PCR amplification and native DNA strands are sequenced. This means that nucleotide base modifications such as DNA methylation are preserved and may be recovered using software such as [Tombo](https://github.com/nanoporetech/tombo). 
+
+The *Cas-mediated PCR-free enrichment protocol* recommends a stratgy for the design of CRISPR RNA (crRNA) probes and provides recommendations for the quality of the purified DNA. These recommendations aim to maximise the on-target sequence recovery by reducing both the DNA background and amounts of off-target DNA. When performing optimally the protocol will delivers up to a couple of Gb of data from a MinION flow cell from 48 hours of sequencing and provide 100s-1000x coverage across target regions.  This tutorial has been prepared to help *assess performance of a Cas-mediated enrichment study* and to help identify target regions and DNA preparation steps that may require further optimisation.
 
 
 There are five goals for this tutorial:
 
-* To introduce a literate framework for analysing Oxford Nanopore DNA sequence data prepared using the MinION, GridION or PromethION
+* To introduce a literate framework for analysing Oxford Nanopore *Cas-mediated PCR-free enriched DNA sequence* data
 * To utilise best data-management practices
-* To provide basic DNA sequence QC metrics, enabling review and consideration of the starting experimental data
-* To map sequence reads to the reference genome and to identify the assess target regions, target-proximal regions and the background-genome for patterns of read mapping
-* To assess target regions for depth-of-coverage and to explore strandedness of mapping
+* To map sequence reads to the reference genome
+* To identify and report the sequence reads that map to the defined target regions and off-target regions
+* To describe the relative depletion of the background genome
 
 
 # Getting started and best practices
@@ -85,33 +99,35 @@ This tutorial requires a computer workstation running a Linux operating system. 
 
 The described analytical workflow makes extensive use of the **`conda`** package management and the **`snakemake`** workflow software. These software packages and the functionality of **`Rmarkdown`** provide the source for a rich, reproducible and extensible tutorial document.
 
-The workflow contained within this Tutorial performs an authentic bioinformatics analysis and using the whole human genome as a reference sequence. There are some considerations in terms of memory and processor requirement. Indexing the whole human genome for sequence read mapping using **`minimap2`** for example will use at least **`18 Gb`** of memory. The minimal recommended hardware setup for this tutorial is therefore a 4 threaded computer with at least 24 Gb of RAM and 15 Gb of storage space. 
+The workflow contained within this Tutorial performs an authentic bioinformatics analysis and using the whole human genome as a reference sequence. There are some considerations in terms of memory and processor requirement. Indexing the whole human genome for sequence read mapping using **`minimap2`** will use at least **`18 Gb`** of memory. The minimal recommended hardware setup for this tutorial is therefore a 4 threaded computer with at least 24 Gb of RAM and 15 Gb of storage space. 
 
 There are few dependencies that need to be installed at the system level prior to running the tutorial. The **`conda`** package management software will coordinate the installation of the required bioinformatics software and their dependencies in user space - this is dependent on a robust internet connection.
 
-As a best practice this tutorial will separate primary DNA sequence data (the base-called fastq files) from the **`Rmarkdown`** source and the genome reference data. The analysis results and figures will again be placed in a separate working directory. The required layout for the primary data is shown in the figure below. This minimal structure will be prepared over the next few sections of this tutorial. The DNA sequences must be placed within a folder called **`RawData`** and the reference genome and annotation files must be placed in a folder named **`ReferenceData`**.
+As a best practice this tutorial will separate primary DNA sequence data (the base-called fastq files) from the **`Rmarkdown`** source and the genome reference data. The analysis results and figures will again be placed in a separate working directory. The required layout for the primary data is shown in the figure below. This minimal structure will be prepared over the next few sections of this tutorial. The DNA sequences and mapping BED file must be placed within a folder called **`RawData`** and the reference genome and annotation files must be placed in a folder named **`ReferenceData`**. All results will be placed in a folder named **`Analysis`** and different sub-folders will be created for different steps in the workflow. The **`Static`** folder contains accessory methods, texts, bibliography and graphics.
 
 
 ![](Static/Images/FolderLayout.png) 
 
 # Experimental setup
 
-The first required step for performing a  differential sequence analysis involves collation of information on the sequence collection, the reference genome and the target regions that should be enriched within the sequence collection.
+The first required step for performing a meta-analysis of a *Cas-mediated PCR-free enrichment protocol* based sequencing study is to define the experimental design. 
+
+The example data included with this tutorial describes a Cas-mediated enrichment experiment that targets the HTT gene. The enriched sequence library has been sequenced using a single MinION flowcell on a GridION sequencing device. To manage the sizes of the datasets downloaded, the example dataset provided has been filtered to select for only the sequence reads on **`Chromosome 4`**. The example data is therefore a **synthetic dataset** - but no other enrichment or modification of the sequences has been performed.  
+
+The design for the tutorial is defined within a YAML format configuration file (**`config.yaml`**). The tutorial's file is shown in the figure below.
+
 
 ![](Static/Images/ExperimentalDesign.png) 
 
-The example data included with this tutorial describes a Cas9 experiment that has been used to enrich the HTT gene target. The enriched sequence library has been sequenced using a MinION flowcell on a GridION sequencing machine. To keep the sizes of the datasets downloaded more manageable, the example dataset provided has been filtered to select for only the sequence reads on **`Chromosome 4`**. Similarly, the **`snakemake`** workflow provided will download just the chromosome 4 reference sequence rather than the whole genome. The example data is therefore a **synthetic dataset** - but no other enrichment or modification of the sequences has been performed.  
 
-This design is described in a configuration file named **`config.yaml`** - an example file has been provided with the tutorial. The content of this file is highlighted in the figure above. 
 
-**`reference_genome`** refers to the genome against which the sequence reads will be mapped; **`genome_annotation`** refers to the gene annotations assigned to this genome sequence. In this tutorial a URL is provided for both and the **`Snakemake`** workflow will download the corresponding files. 
 
-The only other parameters that should be considered include
-
-* **`target_regions`**, 
-* **`study`**,
-* **`target_proximity`**,
-* **`offtarget_level`**
+* **`pipeline`** identifies the workflow that this configuration file belongs to
+* **`study_name`** is a label used to identify the analysis and the label is used to name the files produced during the analysis
+* **`reference_genome`** refers to the genome against which the sequence reads will be mapped. In this tutorial a URL is provided and the **`Snakemake`** workflow will download the corresponding file.
+* **`target_regions`** points to a BED format file that describes the genomic coordinates for each of the targets being assessed. The BED file format is a tab-delimited file with un-named columns describing, in order, the chromosome, start position, end position and target name.
+* **`fastq`** is a pointer to either a single fastq file (may be gzipped) or a folder of fastq files. These are the sequences that will be mapped to the **`reference_genome`** and assessed for mapping to the targets defined in **`target_regions`**
+* **`gstride`**, **`target_proximity`** and **`offtarget_level`** are parameters used to control the analysis. For offtarget and background assessment, the genome is split into windows **`gstride`** nucleotides in length and mean coverage is assessed. Regions with a mean-coverage of > **`offtarget_level X`** the mean background level are defined as being off-target enrichment regions. **`target_proximity`** defines the window up- and down-stream of the **`target_regions`** that are excluded from the background calculations. This reduces overall mean background by excluding ontarget reads that extend beyond the target-region.
 
 
 \newpage
@@ -120,19 +136,19 @@ The only other parameters that should be considered include
 
 This tutorial for the assessment of target enrichment from DNA sequence data makes use of **`snakemake`** (@snakemake2012). Snakemake is a workflow management system implemented in Python. The aim of the Snakemake tool is to enable reproducible and scalable data analyses. The workflow produced within this document should be portable between laptop resources, computer servers and other larger scale IT deployments. The Snakemake workflow additionally defines the sets of required software (and software versions where appropriate) and will automate the installation and deployment of this software through the **conda** package management system.
 
-The **`snakemake`** workflow will call methods that include **`minimap2`** @minimap22018 and **`samtools`** @samtools2009. The planned workflow is shown in the figure below. The provided reference genome sequence will be indexed using **`minimap2`**, each sequence collection will be mapped to the index (again using **`minimap2`** with parameters tuned for the mapping of long reads whilst accommodating exon matches interspersed by introns) and summary statistics will be prepared using the **`samtools`** software. The remainder of the analysis will be performed in the **`R analysis`** described within the report.
+The **`snakemake`** workflow will call methods that include **`minimap2`** @minimap22018 and **`samtools`** @samtools2009. The planned workflow is shown in the figure below. 
+
 
 ![](Static/Images/dag.png) 
 
 The precise commands within the **`Snakefile`** include
 
 * download the specified reference genome
-* download the specified genome annotations
 * use **`minimap2`** to index the reference genome
 * map DNA sequence reads against the reference genome index using **`minimap2`**
-* convert **`minimap2`** output (**`SAM`**) into a sorted **`BAM`** format using **`samtools`**
-* prepare summary mapping statistics using **`Rsamtools`** in a provided **`R`** script
-* filter for the on-target sequence reads using **`seqtk`**
+* convert **`minimap2`** output (**`SAM`**) into a sorted **`BAM`** format using **`samtools`** and filter out the unmapped reads
+* prepare summary mapping statistics using **`Rsamtools`** and **`GenomicAlignments`** from the provided **`R`** script
+* filter for the on-target sequence reads using **`seqtk`** (@seqtkurl)
 
 # Run the snakemake workflow file
 
@@ -152,9 +168,9 @@ snakemake -j <NPROC> all
 
 # Prepare the analysis report
 
-The **`Rmarkdown`** script can be run usimg the **`knit`** dialog in the **`Rstudio`** software. 
+The **`Rmarkdown`** script can be run using the **`knit`** dialog in the **`Rstudio`** software. 
 
-The document can also be rendered from the command line with the following command. This command is also run by the Snakemake workflow
+The document can also be rendered from the command line with the following command. This command is  run automatically during the Snakemake workflow.
 
 \fontsize{8}{12}
 ```

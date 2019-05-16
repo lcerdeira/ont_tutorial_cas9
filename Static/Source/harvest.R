@@ -21,17 +21,21 @@ dir.create(on_target, showWarnings = FALSE, recursive=TRUE)
 
 ##### no more config beyond this point - please #####
 
+referenceFile <- file.path("ReferenceData", basename(reference))
+
 ##### place for the common accessory methods ####
 
 loadReferenceGenome <- function() {
   # derive a referenceGenome object from the named fasta elements in the provided fasta reference resource
-  referenceGenomeSequence <<- readDNAStringSet(referenceGenome.file)
+  referenceGenomeSequence <<- readDNAStringSet(referenceFile)
   referenceGenome <<- data.frame(t(
     data.frame(strsplit(names(referenceGenomeSequence), " "), stringsAsFactors = FALSE)), 
     stringsAsFactors = FALSE)
   referenceGenome$sid <<- seq(nrow(referenceGenome))
   # clip out the mitochondrial genome ...
-  referenceGenome <<- referenceGenome[-which(referenceGenome[,1]=="MT"),]
+  if ("MT" %in% referenceGenome[,1]) { # extra lookup to handle cases when reference is a single entry ...
+    referenceGenome <<- referenceGenome[-which(referenceGenome[,1]=="MT"),]
+  }
 }
 
 getStringSetId <- function(chrId) {
@@ -87,12 +91,12 @@ harvestUnmapped <- function(qualfilelocation, chunk.size=100000, force=FALSE) {
 # load the reference genome
 ####################
 cat(paste0("loading reference genome data", "\n"))
-referenceGenome.file <- file.path("Analysis", "ReferenceGenome", gsub("(\\.zip)|(\\.bz2)|(\\.gz)", "", basename(reference)))
 loadReferenceGenome()
 # for the tutorial we are stripping out the non-primary chromosome chunks ... - in current human genome anything with a dot in name
 # the loadReferenceGenome method is removing the MT genome
-referenceGenome <- referenceGenome[-grep("\\.", referenceGenome[,1]),]
-
+if (length(grep("\\.", referenceGenome[,1])) > 0) {
+  referenceGenome <- referenceGenome[-grep("\\.", referenceGenome[,1]),]
+}
 
 ####################
 # identify the project BAM files

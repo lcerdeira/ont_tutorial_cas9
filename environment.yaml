@@ -1,0 +1,23 @@
+channels:
+  - bioconda
+  - conda-forge
+  - r
+  - sagrudd
+dependencies:
+  - snakemake-minimal
+  - python
+  - samtools
+  - minimap2
+  - seqtk
+  - r-essentials
+  - r
+  - rstudio
+  - nanopore-r-basicqc
+  - graphviz  # required for dag display
+  - imagemagick
+  - r-kableextra
+  - bioconductor-biostrings
+  - r-gtools
+  - bioconductor-rsamtools =1.34.0
+  - bioconductor-shortread
+  

@@ -124,7 +124,7 @@ rule Rpreprocess:
     targets = expand("Analysis/OnTarget/{target}.mappedreads", target=TARGETS),
     offtargets = "Analysis/OnTarget/OffTarget.mappedreads"
   shell:
-    "Rscript harvest.R"
+    "Rscript Static/Source/harvest.R"
     
 # filter the starting fastq for ontarget reads
 rule onTargetReadDump:
