@@ -9,15 +9,10 @@ dependencies:
   - samtools
   - minimap2
   - seqtk
-  - r-essentials
   - r
   - rstudio
-  - nanopore-r-basicqc
-  - graphviz  # required for dag display
+  - graphviz
   - imagemagick
-  - r-kableextra
-  - bioconductor-biostrings
-  - r-gtools
-  - bioconductor-rsamtools =1.34.0
-  - bioconductor-shortread
+  - ont_tutorial_cas9
+  - pandas
   

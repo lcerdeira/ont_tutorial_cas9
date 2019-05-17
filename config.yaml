@@ -20,5 +20,7 @@ gstride: 100
 target_proximity: 25000
 # a threshold for defining off-target mapping; this is ($level$ * mean background) expression
 offtarget_level: 20
+# how many threads may a process use on this system?
+threads: 8
 
 tutorialText: TRUE

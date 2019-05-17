@@ -1,5 +1,5 @@
 ---
-title: "Target enrichment evaluation from a Cas9-based workflow"
+title: "Evaluation of read-mapping characteristics from a Cas-mediated PCR-free enrichment"
 date: "Report created: `r Sys.Date()`"
 output:
   html_document:
@@ -21,7 +21,7 @@ always_allow_html: yes
 ---
 
 <div style="position:absolute;top:0px;right:0px;padding:15px;background-color:gray;width:45%;">
-```{r, echo=FALSE, eval=FALSE}
+```{r, echo=FALSE}
 knitr::include_graphics("https://nanoporetech.com/themes/custom/nanopore/images/ont-logo.svg?tutorial=cas9enrichment")
 ```
 </div>
@@ -75,6 +75,8 @@ slurpContent <- function(filename) {
 referenceFile <- file.path("ReferenceData", basename(reference))
 reportDPI <- 90
 colMax <- 4
+
+#knitr::knit_exit()
 ```
 
 
@@ -313,10 +315,19 @@ legendDF <- data.frame(x=Inf, y=Inf,
                          col=rep(seq(1, colMax), length.out=length(plotLegend)))
 
 # add row and column data to aggregatedGR
-aggregatedGR$row <- unlist(lapply(aggregatedGR$gene, function(x) { which(posMatrix==x, arr.ind=TRUE)[[1]] }))
-aggregatedGR$col <- unlist(lapply(aggregatedGR$gene, function(x) { which(posMatrix==x, arr.ind=TRUE)[[2]] }))
+#aggregatedGR$row <- unlist(lapply(aggregatedGR$gene, function(x) { which(posMatrix==x, arr.ind=TRUE)[[1]] }))
+#aggregatedGR$col <- unlist(lapply(aggregatedGR$gene, function(x) { which(posMatrix==x, arr.ind=TRUE)[[2]] }))
+#
+# - this lapply uses the whole data and takes a little too long ..
+aggregatedGR$row <- 0
+aggregatedGR$col <- 0
+for (gid in unique(mcols(aggregatedGR)$gene)) {
+  matrixpos <- which(posMatrix==gid, arr.ind=TRUE)
+  matchrows <- which(mcols(aggregatedGR)$gene==gid)
+  aggregatedGR$row[matchrows] <- matrixpos[[1]]
+  aggregatedGR$col[matchrows] <- matrixpos[[2]]
+}
 aggregatedGR$rev_cov <- aggregatedGR$binned_cov - aggregatedGR$fwd_cov
-
 
 singlePlot <- function(geneName, covData, delta=0) {
   delta=min(delta, target_proximity)
@@ -336,8 +347,14 @@ singlePlot <- function(geneName, covData, delta=0) {
   return(plot)
 }
 
+ontarget.meta <- file.path(r_results, paste0(study,"_ontarget.xls"))
+write.csv(as.data.frame(ontargetUniverse)[,c(1,2,3,4,6,8,14,16,23)], ontarget.meta)
 ```
 
+
+* The list of off-target read Ids can be found in the file **`Analysis/OnTarget/<TARGETNAME>.mappedreads`**
+* The **`fastq`** sequence file containing the raw sequence reads corresponding to these Ids can be found in the file **`Analysis/OnTarget/<TARGETNAME>.fastq`**
+* The coordinate information for the off-target regionms can be found in the file **`r ontarget.meta`**
 
 ## Visual representation of depth-of-coverage
 
@@ -472,8 +489,15 @@ colnames(offtargtop) <- c("chrId", "start", "end", "mean coverage", "reads in se
 kable(offtargtop, format="html", caption="Table summarising the location and characteristics for the off-target regions with the highest depth-of-coverage", booktabs=TRUE, table.envir='table*', linesep="", escape = FALSE)  %>%
   kable_styling(c("striped", "condensed")) %>%
   footnote(symbol=c("This table has been prepared using only read mapping information that corresponds to a primary map", "The rstart column describes the number of sequences that start within this genomic interval (using SAM start coordinate only)", "meanreadLen is the mean sequence read length for the rstart genes identified; their strandedness is summarised in strandp (the number of sequences that appear on the forward strand) and the mapping quality is summarised in mapq", "dmean summarised the mean depth of coverage across the sequenced interval"), symbol_title="please note: ", footnote_as_chunk = TRUE)
+
+offtarget.meta <- file.path(r_results, paste0(study,"_offtarget.xls"))
+write.csv(as.data.frame(offtargetUniverse)[,c(1,2,3,4,6,8,14,16,23)], offtarget.meta)
 ```
 
+
+* The list of off-target read Ids can be found in the file **`Analysis/OnTarget/OffTarget.mappedreads`**
+* The **`fastq`** sequence file containing the raw sequence reads corresponding to these Ids can be found in the file **`Analysis/OnTarget/OffTarget.fastq`**
+* The coordinate information for the off-target regionms can be found in the file **`r offtarget.meta`**
 
 
 # Reproducible research - produce your own report

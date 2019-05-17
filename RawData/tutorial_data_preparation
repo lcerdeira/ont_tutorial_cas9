@@ -1,0 +1,11 @@
+# how was this dataset prepared?
+
+- fastq from 20190502_1617_GA30000_FAK76554_5a42db91 run through tutorial
+    - unmapped reads dropped
+    - mapping parameters as specified in snakemake
+    - results to sorted and indexed BAM (as in tutorial workflow)
+- samtools view -S cas9_FAK76554.bam 4 > cas9_FAK76554.4.sam                                 # to select reads from chr4
+- cat ./RawData/cas9_FAK76554.4.sam | awk '{print $1}' > ./RawData/cas9_FAK76554.4.sam.ids   # filter out the mapped read ids
+- cat ./RawData/FAK76554_9b52beb8b4f9ec458eb28c28b35822acaff84952.fastq | seqtk subseq - ./RawData/cas9_FAK76554.4.sam.ids  > ./RawData/FAK76554.fastq
+- gzip ./RawData/FAK76554.fastq
+- cleanup

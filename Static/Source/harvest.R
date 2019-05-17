@@ -12,7 +12,7 @@ reference <- config$reference_genome
 gstride <- as.integer(config$gstride)
 target_proximity <- as.integer(config$target_proximity)
 offtarget_level <- as.integer(config$offtarget_level)
-max_threads <- 8
+max_threads <- as.integer(config$threads)
 
 r_results <- file.path("Analysis","R")
 on_target <- file.path("Analysis","OnTarget")
@@ -178,11 +178,14 @@ backgroundR <- wgaba[-queryHits(findOverlaps(wgaba, offR))]
 cat(paste0("preparing mapping characteristics", "\n"))
 backgroundUniverse <- GenomicRanges::reduce(backgroundR)
 offtargetUniverse <- GenomicRanges::reduce(offR)
-ontargetUniverse <- GenomicRanges::reduce(br)
+#ontargetUniverse <- GenomicRanges::reduce(br)
+###### curious problem here; if the target regions are overlapping (e.g. on different strands ...) then the reduce
+# will lead to a size collision in the next names(...) steps - we will skip this reduce step on the ontarget to keep
+# it intact and as defined
+ontargetUniverse <- ontargetUniverse <- GRanges(br)
 targetproximalUniverse <- GenomicRanges::reduce(fr)
 
 names(ontargetUniverse) <- names(br)
-
 
 ####################
 # big ugly BAM parsing function; dive across a GRange
@@ -351,4 +354,10 @@ aggregatedGR <- GenomicRanges::makeGRangesFromDataFrame(aggregatedCov[,-1], keep
 save(aggregatedGR, file=aggregatedCovFile)
 
 
-offtCov <- pbmclapply(seq_along(offtargetUniverse), aggregateDepthInfo, xr=offtargetUniverse, geneId="OffTarget", mc.cores=min(detectCores()-1,8))
+offtCov <- pbmclapply(seq_along(offtargetUniverse), aggregateDepthInfo, xr=offtargetUniverse, geneId="OffTarget", mc.cores=min(detectCores()-1,max_threads))
+aggregatedOff <- bind_rows(offtCov, .id = "column_label")
+aggregatedOffFile <- file.path(r_results, paste0(study, "_aggregated_offt_coverage", ".Rdata"))
+#aggregatedOffGR <- GenomicRanges::makeGRangesFromDataFrame(aggregatedOff[,-1], keep.extra.columns = TRUE)
+#save(aggregatedOffGR, file=aggregatedOffFile)
+save(aggregatedOff, file=aggregatedOffFile)
+
