@@ -13,7 +13,12 @@ reference_genome = config["reference_genome"]
 # ReferenceGenome is a derivative of the defined location
 ReferenceGenome = os.path.join("ReferenceData", os.path.basename(reference_genome))
 ReferenceGenomeMMI = re.sub("(.zip)|(.bz2)|(.gz)", "", ReferenceGenome)+".mmi"
-
+gzippedRef = False
+UnzippedReferenceGenome = None
+# accommodate some handling of compressed genome references
+if (re.search("\.gz$", ReferenceGenome)):
+  gzippedRef = True
+  UnzippedReferenceGenome = re.sub("(\.zip$)|(\.bz2$)|(\.gz$)", "", ReferenceGenome)
 
 # some fastq handling - a fastq may exist as a provided file that may be compressed or uncompressed; or may be a pointer
 # to a folder that contains one or more fastq files that may themselves be compressed or uncompressed
@@ -61,6 +66,19 @@ rule download_reference_genome:
     shell("mv {input} {output}")
 
 
+"""
+A simple method to quickly unpack a gzipped reference; lazy
+- this only makes sense for the IGV step in the workflow
+"""
+rule unzip_reference_genome:
+  input:
+    ReferenceGenome
+  output:
+    UnzippedReferenceGenome
+  run:
+    shell("gunzip -c {input} > {output}")
+
+
 
 """
 create Minimap2 index - this has a minimal additional workflow cost; reap benefits if the workflow is run multiple times
@@ -69,7 +87,7 @@ create Minimap2 index - this has a minimal additional workflow cost; reap benefi
 # build minimap2 index
 rule Minimap2Index: 
   input:
-    genome = ReferenceGenome
+    genome = UnzippedReferenceGenome if gzippedRef else ReferenceGenome
   output:
     index = ReferenceGenomeMMI
   shell:
