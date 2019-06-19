@@ -56,6 +56,7 @@ Editing the workflow's configuration file, **`config.yaml`**, will allow the ana
 5. Initialise the Conda environment 
 ```
     source activate ont_tutorial_cas9
+    R CMD javareconf > /dev/null 2>&1
 ```
 
 
