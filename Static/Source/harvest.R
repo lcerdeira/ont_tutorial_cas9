@@ -16,6 +16,7 @@ max_threads <- as.integer(config$threads)
 
 r_results <- file.path("Analysis","R")
 on_target <- file.path("Analysis","OnTarget")
+off_target <- file.path("Analysis","OffTarget")
 dir.create(r_results, showWarnings = FALSE, recursive=TRUE)
 dir.create(on_target, showWarnings = FALSE, recursive=TRUE)
 
@@ -217,7 +218,7 @@ getStartStrand <- function(x, gdata) {
   
   lf <- letterFrequency(subseq(referenceGenomeSequence[[getStringSetId(seqnames(nd))]], start(nd), end(nd)), c("G", "C", "N"))
   
-  rstart <- length(c2)                                        # this is equiv. to earlier readStarts
+  rstart <- length(c2)                                       # this is equiv. to earlier readStarts
   basesstart <- sum(qwidth(c2))                              # earlier basesReadsStarted
   meanreadlen <- mean(qwidth(c1))                            # see previous *readLen* - now mean for *any* overlapping read
   startreadlen <- mean(qwidth(c2))                           # what is the mean sequence length for reads that start in segment?
@@ -338,8 +339,11 @@ aggregateDepthInfo <- function(x, xr, ontarget=FALSE, geneId=NA) {
   ba$fwd_cov <- mcols(binnedAverage(bins, fcov, "fwd_cov"))$fwd_cov
   
   # write the target sequences to file ...
-  write(mcols(c2)$qname, file.path(on_target, paste0(geneId, ".mappedreads")), append=TRUE)
-  
+  if (ontarget) {
+    write(mcols(c2)$qname, file.path(on_target, paste0(geneId, ".mappedreads")), append=TRUE)
+  } else {
+    write(mcols(c2)$qname, file.path(off_target, paste0(geneId, ".mappedreads")), append=TRUE)
+  }
   return(as.data.frame(ba))
 }
   

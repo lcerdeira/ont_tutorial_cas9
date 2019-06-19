@@ -73,7 +73,9 @@ rule Minimap2Index:
   output:
     index = ReferenceGenomeMMI
   shell:
-    "minimap2 -t 8 -d {output.index} {input.genome}"
+    """
+    minimap2 -t 8 -d {output.index} {input.genome}
+    """
 
 
 """
@@ -122,7 +124,7 @@ rule Rpreprocess:
   output:
     rout = "Analysis/R/"+fastqTarget+"_mapping_results.Rdata",
     targets = expand("Analysis/OnTarget/{target}.mappedreads", target=TARGETS),
-    offtargets = "Analysis/OnTarget/OffTarget.mappedreads"
+    offtargets = "Analysis/OffTarget/OffTarget.mappedreads"
   shell:
     "Rscript Static/Source/harvest.R"
     
@@ -142,9 +144,9 @@ rule onTargetReadDump:
 rule offTargetReadDump:
   input:
     rin = "Analysis/R/"+fastqTarget+"_mapping_results.Rdata", # not actually used; for method chaining only
-    readIds = "Analysis/OnTarget/OffTarget.mappedreads"
+    readIds = "Analysis/OffTarget/OffTarget.mappedreads"
   output:
-    fastq = "Analysis/OnTarget/OffTarget.fastq"
+    fastq = "Analysis/OffTarget/OffTarget.fastq"
   params:
     fap = fastqAccessParam
   shell:
@@ -164,5 +166,5 @@ rule renderTheReport:
 rule all:
   input:
     expand("Analysis/OnTarget/{target}.fastq", target=TARGETS),
-    "Analysis/OnTarget/OffTarget.fastq",
+    "Analysis/OffTarget/OffTarget.fastq",
     "ont_tutorial_cas9.html"

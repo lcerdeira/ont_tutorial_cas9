@@ -20,6 +20,7 @@ Editing the workflow's configuration file, **`config.yaml`**, will allow the ana
 * **`samtools`** for SAM/BAM handling and mapping statistics
 * **`RSamtools`** and **`GenomicAlignments`**; R software for parsing BAM files
 * **`seqtk`** for writing out the subseq of sequence reads that map to the target region
+* **`IGV`** for visualising mapping characteristics at specific genomic regions
 
 ## The computational requirements include: 
 

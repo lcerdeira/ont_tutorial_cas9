@@ -51,6 +51,7 @@ library(GenomicAlignments)
 library(dplyr)
 library(emojifont)
 library(ggbio)
+library(xlsx)
 
 config <- yaml.load_file("config.yaml")
 bed_src <- config$target_regions
@@ -347,12 +348,15 @@ singlePlot <- function(geneName, covData, delta=0) {
   return(plot)
 }
 
-ontarget.meta <- file.path(r_results, paste0(study,"_ontarget.xls"))
-write.csv(as.data.frame(ontargetUniverse)[,c(1,2,3,4,6,8,14,16,23)], ontarget.meta)
+ontarget.meta <- file.path("Analysis", "OnTarget", paste0(study,"_ontarget.xls"))
+#write.csv(as.data.frame(ontargetUniverse)[,c(1,2,3,4,6,8,14,16,23)], ontarget.meta)
+write.xlsx(as.data.frame(ontargetUniverse)[,c(1,2,3,4,6,8,14,16,23)], 
+           file = ontarget.meta,
+           sheetName = "OnTargetMapping", append = FALSE)
 ```
 
 
-* The list of off-target read Ids can be found in the file **`Analysis/OnTarget/<TARGETNAME>.mappedreads`**
+* The list of on-target read Ids can be found in the file **`Analysis/OnTarget/<TARGETNAME>.mappedreads`**
 * The **`fastq`** sequence file containing the raw sequence reads corresponding to these Ids can be found in the file **`Analysis/OnTarget/<TARGETNAME>.fastq`**
 * The coordinate information for the off-target regionms can be found in the file **`r ontarget.meta`**
 
@@ -411,7 +415,7 @@ The figure above has been produced using a derivative of the earlier **`singlePl
 
 
 
-```{r aggregatePlot, echo=FALSE, warning=FALSE}
+```{r aggregatePlot, echo=FALSE, warning=FALSE, results='asis', eval=(length(unique(as.character(seqnames(backgroundUniverse)))) > 1)}
 plotCoverageMegablock <- function(covData) {
   covData$start <- (as.numeric(covData$start))/1000
   suppressWarnings(megadepthplot <- ggplot(covData, aes(pos, binned_cov)) + 
@@ -421,12 +425,17 @@ plotCoverageMegablock <- function(covData) {
   return(megadepthplot)
 }
 
+#if (length(unique(as.character(seqnames(backgroundUniverse)))) > 1) {
 plotCoverageMegablock(as.data.frame(aggregatedGR))
-
+cat("
+The final plot is a tiled plot that can be used to present multiple depth-of-coverage plots in a single figure. This looks great for studies that are evaluating multiple targets; if you have a single target region this plot will not be displayed.     
+")
 ```
 
 
-The final plot is a tiled plot that can be used to present multiple depth-of-coverage plots in a single figure. This looks great for studies that are evaluating multiple targets; if you have a single target region this may appear a little empty. 
+
+
+
 
 
 ```{r offTargetByDepth, echo=FALSE}
@@ -462,6 +471,15 @@ The **`ideogram`** below presents a description of the off-target mapping locati
 ```{r, echo=FALSE, message=FALSE}
 
 seqlevels(offtargetUniverse) <- unique(gtools:::mixedsort(as.character(seqnames(offtargetUniverse))))
+if (length(unique(as.character(seqnames(offtargetUniverse))))==1) {
+  # this is a tutorial workflow ... may require debugging depending on how script is used in real workflows?
+  if (unique(gtools:::mixedsort(as.character(seqnames(offtargetUniverse))))=="4") {
+    seqlevels(offtargetUniverse) <- append(seq(1,22), c("X", "Y"))
+    # width(referenceGenomeSequence[referenceGenome[match(seqlevels(offtargetUniverse), referenceGenome[,1]), "sid"]])
+    seqlengths(offtargetUniverse) <- c(248956422, 242193529, 198295559, 190214555, 181538259, 170805979, 159345973, 145138636, 138394717, 133797422, 135086622, 133275309, 114364328, 107043718, 101991189, 90338345, 83257441, 80373285, 58617616, 64444167, 46709983, 50818468, 156040895, 57227415)
+
+  }
+}
 
 autoplot(offtargetUniverse, layout="karyogram")
 
@@ -490,14 +508,45 @@ kable(offtargtop, format="html", caption="Table summarising the location and cha
   kable_styling(c("striped", "condensed")) %>%
   footnote(symbol=c("This table has been prepared using only read mapping information that corresponds to a primary map", "The rstart column describes the number of sequences that start within this genomic interval (using SAM start coordinate only)", "meanreadLen is the mean sequence read length for the rstart genes identified; their strandedness is summarised in strandp (the number of sequences that appear on the forward strand) and the mapping quality is summarised in mapq", "dmean summarised the mean depth of coverage across the sequenced interval"), symbol_title="please note: ", footnote_as_chunk = TRUE)
 
-offtarget.meta <- file.path(r_results, paste0(study,"_offtarget.xls"))
-write.csv(as.data.frame(offtargetUniverse)[,c(1,2,3,4,6,8,14,16,23)], offtarget.meta)
+offtarget.meta <- file.path("Analysis", "OffTarget", paste0(study,"_offtarget.xls"))
+#write.csv(as.data.frame(offtargetUniverse)[,c(1,2,3,4,6,8,14,16,23)], offtarget.meta)
+
+# small reporting issue - reads are not double counted that means we can have blocks of background where there is
+# sufficient depth, but no reads originate in the block - this leads to Na mean quality and mapq
+
+write.xlsx(as.data.frame(offtargetUniverse)[,c(1,2,3,4,6,8,14,16,23)], 
+           file = offtarget.meta,
+           sheetName = "OffTargetMapping", append = FALSE)
 ```
 
 
-* The list of off-target read Ids can be found in the file **`Analysis/OnTarget/OffTarget.mappedreads`**
-* The **`fastq`** sequence file containing the raw sequence reads corresponding to these Ids can be found in the file **`Analysis/OnTarget/OffTarget.fastq`**
-* The coordinate information for the off-target regionms can be found in the file **`r offtarget.meta`**
+* The list of off-target read Ids can be found in the file **`Analysis/OffTarget/OffTarget.mappedreads`**
+* The **`fastq`** sequence file containing the raw sequence reads corresponding to these Ids can be found in the file **`Analysis/OffTarget/OffTarget.fastq`**
+* The coordinate information for the off-target regions can be found in the file **`r offtarget.meta`**
+
+
+# Read Mapping Visualisation using IGV
+
+The Integrative Genomics Viewer (**`IGV`**) is a tool, that has been installed by **`conda`**, for the visualisation of genomics data. The software provides functionality for the display of sequence mapping data from BAM files that can subsequently be overlaid with "tracks" of information that can include depth-of-coverage for mapping data and gene annotations. 
+
+![](Static/Images/Cas9-IGV.PNG)
+
+The figure above presents a screenshot from the **`IGV`** software. The coordinates for an off-target region have been selected (see the top bar of the figure for the coordinates) and the display has been zoomed-in so that the quality and mapping strand can be observed.
+
+**`IGV`** can be started from the command line by using the command `igv`.
+
+In this tutorial we recommend that you instead encourage **`IGV`** to display sequence information around a target of interest. During the analysis presented in this tutorial, we have been reviewing the enrichment of sequences around the **`HTT`** gene.
+
+We would like to explore the read mapping information around this gene. The command below will open the **`IGV`** browser to the appropriate genome coordinates - in this example we are using the feature with coordinates `[Chr 4] Start=3072436, Stop=3079444` - this corresponds to the **`HTT`** gene.
+
+
+```
+igv -g ./ReferenceData/Homo_sapiens.GRCh38.dna.chromosome.4.fa \
+./Analysis/Minimap2/cas9_FAK76554.bam,./RawData/enrichment_targets.bed \
+4:49091201-49156600
+```
+
+** please note that if you are using your own reference genome and BED file that the parameters above may require modifications **
 
 
 # Reproducible research - produce your own report
@@ -517,7 +566,7 @@ It is also worth recording the versions of the software that have been used for 
 \fontsize{8}{12}
 
 ```{r, engine='bash', echo=FALSE, comment=NA}
-conda list "samtools|minimap2|snakemake|rstudio|seqtk"
+conda list "samtools|minimap2|snakemake|rstudio|seqtk|igv"
 ```
 
 \fontsize{10}{14}
