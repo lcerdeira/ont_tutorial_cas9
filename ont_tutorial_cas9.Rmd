@@ -52,6 +52,7 @@ library(dplyr)
 library(emojifont)
 library(ggbio)
 library(xlsx)
+library(tibble)
 
 config <- yaml.load_file("config.yaml")
 bed_src <- config$target_regions
@@ -358,7 +359,7 @@ write.xlsx(as.data.frame(ontargetUniverse)[,c(1,2,3,4,6,8,14,16,23)],
 
 * The list of on-target read Ids can be found in the file **`Analysis/OnTarget/<TARGETNAME>.mappedreads`**
 * The **`fastq`** sequence file containing the raw sequence reads corresponding to these Ids can be found in the file **`Analysis/OnTarget/<TARGETNAME>.fastq`**
-* The coordinate information for the off-target regionms can be found in the file **`r ontarget.meta`**
+* The coordinate information for the off-target regionms can be found in the file **` `r ontarget.meta` `**
 
 ## Visual representation of depth-of-coverage
 
@@ -493,20 +494,24 @@ The coordinates for these off-target regions have been written to an accompanyin
 
 ```{r, echo=FALSE}
 
-offtargtop <- as.data.frame(offtargetUniverse[order(offtargetUniverse$dmean, decreasing=TRUE)[1:10]])[,c(1,2,3,23,6,8,10,14)]
+offtargtop <- as.data.frame(offtargetUniverse[order(offtargetUniverse$dmean, decreasing=TRUE)[1:10]])[,c(1,2,3,23,6,8,10,11,16,14)]
 
-offtargtop$strandp <- round(as.numeric(offtargtop$strandp)/as.numeric(offtargtop$rstart)*100, digits=2)
+offtargtop$strandp <- round(as.numeric(offtargtop$strandp)/(as.numeric(offtargtop$strandp)+as.numeric(offtargtop$strandn))*100, digits=2)
+offtargtop <- add_column(offtargtop, width =(offtargtop$end-offtargtop$start+1), .after = 3)
 offtargtop$start <- scales::comma_format()(offtargtop$start)
 offtargtop$end <- scales::comma_format()(offtargtop$end)
-offtargtop$dmean <- round(offtargtop$dmean, digits=2)
+offtargtop$dmean <- round(offtargtop$dmean, digits=0)
 offtargtop$meanreadlen <- scales::comma_format()(offtargtop$meanreadlen)
 offtargtop$mapq <- round(offtargtop$mapq, digits=2)
+offtargtop$readq <- round(offtargtop$readq, digits=2)
+offtargtop <- offtargtop[,-which(colnames(offtargtop)=="strandn")]
 
-colnames(offtargtop) <- c("chrId", "start", "end", "mean coverage", "reads in segment", "mean read length", "reads on FWD%", "MAPQ")
+
+colnames(offtargtop) <- c("chrId", "start", "end", "width", "mean coverage", "reads in segment", "mean read length", "%FWD reads", "mean readQ", "mean MAPQ")
 
 kable(offtargtop, format="html", caption="Table summarising the location and characteristics for the off-target regions with the highest depth-of-coverage", booktabs=TRUE, table.envir='table*', linesep="", escape = FALSE)  %>%
   kable_styling(c("striped", "condensed")) %>%
-  footnote(symbol=c("This table has been prepared using only read mapping information that corresponds to a primary map", "The rstart column describes the number of sequences that start within this genomic interval (using SAM start coordinate only)", "meanreadLen is the mean sequence read length for the rstart genes identified; their strandedness is summarised in strandp (the number of sequences that appear on the forward strand) and the mapping quality is summarised in mapq", "dmean summarised the mean depth of coverage across the sequenced interval"), symbol_title="please note: ", footnote_as_chunk = TRUE)
+  footnote(symbol=c("This table has been prepared using only read mapping information that corresponds to a primary map", "The reads in segment column describes the number of sequences that start within this genomic interval (using SAM start coordinate only)", "mean read length is the mean sequence read length for the mapping reads identified; their strandedness is summarised in %FWD reads (the number of sequences that appear on the forward strand) and the mapping quality is summarised in mapq"), symbol_title="please note: ", footnote_as_chunk = TRUE)
 
 offtarget.meta <- file.path("Analysis", "OffTarget", paste0(study,"_offtarget.xls"))
 #write.csv(as.data.frame(offtargetUniverse)[,c(1,2,3,4,6,8,14,16,23)], offtarget.meta)
@@ -522,12 +527,12 @@ write.xlsx(as.data.frame(offtargetUniverse)[,c(1,2,3,4,6,8,14,16,23)],
 
 * The list of off-target read Ids can be found in the file **`Analysis/OffTarget/OffTarget.mappedreads`**
 * The **`fastq`** sequence file containing the raw sequence reads corresponding to these Ids can be found in the file **`Analysis/OffTarget/OffTarget.fastq`**
-* The coordinate information for the off-target regions can be found in the file **`r offtarget.meta`**
+* The coordinate information for the off-target regions can be found in the file **` `r offtarget.meta` `**
 
 
 # Read Mapping Visualisation using IGV
 
-The Integrative Genomics Viewer (**`IGV`**) is a tool, that has been installed by **`conda`**, for the visualisation of genomics data. The software provides functionality for the display of sequence mapping data from BAM files that can subsequently be overlaid with "tracks" of information that can include depth-of-coverage for mapping data and gene annotations. 
+The Integrative Genomics Viewer (**`IGV`**) is a tool (@10.1093/bib/bbs017, @Robinsone31), that has been installed by **`conda`**, for the visualisation of genomics data. The software provides functionality for the display of sequence mapping data from BAM files that can subsequently be overlaid with "tracks" of information that can include depth-of-coverage for mapping data and gene annotations. 
 
 ![](Static/Images/Cas9-IGV.PNG)
 

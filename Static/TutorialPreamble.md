@@ -158,9 +158,10 @@ The precise commands within the **`Snakefile`** include
 \fontsize{8}{12}
 ```
 # just type snakemake to run the workflow
-# don't type <NPROC> but specify the number of processor cores available (e.g. 2 or 4)
+# Methods run inside the workflow can utilise multiple compute cores for parallel performance
+# Use the -j flag to specify the number of cores to use; the example below requests 4 cores
 
-snakemake -j <NPROC> all
+snakemake -j 4 all
 ```
 \fontsize{10}{14}
 
