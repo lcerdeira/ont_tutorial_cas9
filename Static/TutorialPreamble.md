@@ -12,6 +12,15 @@ The tutorial is packaged with example data, and the workflow can be reproduced t
 
 Editing the workflow's configuration file, **`config.yaml`**, will allow the analyses to be run using different DNA sequence collections, reference genomes, and with different BED files that define the regions of interest.
 
+## What will this tutorial produce?
+
+* A rich HTML format report containing summary statistics and figures highlighting performance of the enrichment protocol
+* **`Microsoft Excel`** format files containing coordinates and summary statistics for on-target regions
+* **`Fastq`** format file containing reads that correspond to each of the target regions specified
+* **`Microsoft Excel`** format files containing summary statistics for sequence regions defined as showing off-target enrichment
+* **`Fastq`** format sequence file containing reads that were classified as off-target enrichment
+
+
 ## Methods utilised include: 
 
 * **`conda`** for management of bioinformatics software installations
@@ -65,25 +74,17 @@ Editing the workflow's configuration file, **`config.yaml`**, will allow the ana
 
 # Introduction
 
-Targeted DNA sequencing is an important research tool used to study genetic diversity. 
+Targeted sequencing strategies provide a cost-effective way of sequencing regions of interest to high coverage. Unlike other enrichment methods nanopore sequencing does not require amplification of any sort which allows us to target:
 
-It is often more appropriate to sequence DNA from candidate genes or panels of target regions than to sequence the whole genome. 
+* Long gene targets that are not amenable to long-range PCR (>30 kb) either in a single pass or using up to 100 target sites in a single assay (known as a tiling approach)
+* Regions with methylation patterns or modifications (that can be recovered using software such as TOMBO)
+* Regions that are highly repetitive
 
-The characterisation of target regions can be used to e.g. assess specific structural variations and single nucleotide polymorphisms.
+[Oxford Nanopore Technologies](https://nanoporetech.com) provides a [Cas-mediated PCR-free enrichment protocol](https://community.nanoporetech.com/protocols/Cas-mediated-PCR-free-enrich/) which uses an enrichment strategy based on the design of CRISPR RNA (crRNA) probe sequences that may flank or tile-across one or more target regions. The crRNAs program the Cas9 protein to bind and cleave DNA at sites that match the crRNA sequence. This Cas9-mediated cut of the DNA, and the production of a newly-exposed and “deprotected” DNA end is the basis of the enrichment protocol.
 
-Traditional targetting strategies are reliant on PCR for the amplification from small amounts of target. This amplification step both limits the length of the individual DNA sequence reads and loses base modification information. 
+For an equivalent amount of sequenced library a Cas-mediated DNA enrichment will provide a higher coverage for the targeted regions than sequencing the whole genome alone.
 
-Longer sequence reads are critical because they can provide sufficient context to both phase genetic variants over target regions and to resolve repeat counts in repeat expansions.
-
-[Oxford Nanopore Technologies](https://nanoporetech.com) provides a [Cas-mediated PCR-free enrichment protocol](https://community.nanoporetech.com/protocols/Cas-mediated-PCR-free-enrich/) that allows users to selectively enrich for genomic regions of interest and to sequence long, single molecules of native DNA.
-
-The enrichment strategy is based the design of CRISPR RNA (crRNA) probe sequences that may flank or tile-across one or more target regions. The crRNAs program the Cas9 protein to bind and cleave DNA at sites that match the crRNA sequence. This Cas9-mediated cut of the DNA, and the production of a newly-exposed and "deprotected" DNA end is the basis of the enrichment protocol. 
-
-For an equivalent amount of sequenced library a Cas-mediated DNA enrichment will provide a higher coverage for the targeted regions than sequencing the whole genome alone. 
-
-The DNA enrichment protocol does not require PCR amplification and native DNA strands are sequenced. This means that nucleotide base modifications such as DNA methylation are preserved and may be recovered using software such as [Tombo](https://github.com/nanoporetech/tombo). 
-
-The *Cas-mediated PCR-free enrichment protocol* recommends a stratgy for the design of CRISPR RNA (crRNA) probes and provides recommendations for the quality of the purified DNA. These recommendations aim to maximise the on-target sequence recovery by reducing both the DNA background and amounts of off-target DNA. When performing optimally the protocol will delivers up to a couple of Gb of data from a MinION flow cell from 48 hours of sequencing and provide 100s-1000x coverage across target regions.  This tutorial has been prepared to help *assess performance of a Cas-mediated enrichment study* and to help identify target regions and DNA preparation steps that may require further optimisation.
+The *Cas-mediated PCR-free enrichment protocol* recommends a strategy for the design of CRISPR RNA (crRNA) probes and provides recommendations for the quality of the purified DNA. These recommendations aim to maximise the on-target sequence recovery by reducing both the DNA background and amounts of off-target DNA. When performing optimally the protocol will delivers up to a couple of Gb of data from a MinION flow cell from 48 hours of sequencing and provide 100s-1000x coverage across target regions. This tutorial has been prepared to help assess performance of a Cas-mediated enrichment study and to help identify target regions and DNA preparation steps that may require further optimisation.
 
 
 There are five goals for this tutorial:

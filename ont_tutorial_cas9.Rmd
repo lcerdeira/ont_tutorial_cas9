@@ -119,22 +119,15 @@ The first step for the analysis of the Cas9 enrichment strategy is to assess the
 
 ## Definition of background and off-target regions of the genome
 
-The DNA sequence reads from sequencing have been mapped to their optimal genomic locations. To understand the characteristics of the enrichment analysis it is necessary to consider separately targetted and untargetted regions of the genome. To effectively understand the enrichment characteristics, the genome is considered as blocks of non-overlapping sequence regions. These blocks can be considered as belonging to four different mutually exclusive groups. These groups are
+The Cas-enrichment protocol depletes off-target DNA therefore enriching for the region of interest. In this tutorial all reads are aligned to the reference genome but not all of the reads sequenced during a Cas9 enrichment experiment align to the region of interest. All reads can be classed into four different mutually exclusive groups:
 
-* The **`On Target`** regions that are defined as regions of interest in the provided **`BED`** format coordinate file (*`r bed_src`*)
-* The **`Target Flanking`** regions that are immediately upstream or downstream of an On Target region (this regions is defined as `r as.integer(target_proximity)` bases)
-* The **`Background`** regions of the genome have a stochastic coverage
-* The **`Off Target`** regions are defined as the subset of the background genome that has a depth-of-coverage of > **`r offtarget_level`** -times that of the mean background level.
+* **`On Target`** - reads that align to the regions of interest provided in the **`BED`** format coordinate file (*`r bed_src`*)
+* **`Target Proximal`** - reads that align to the regions immediately upstream or downstream of the region of interest (this regions is defined as `r as.integer(target_proximity)` bases)
+* **`Off Target`** - Each crRNA in a panel should allow Cas9 to cut genomic DNA at sequence complementary sites with perfect alignment. Cas9 may also cut genomic DNA at complementary sites with multiple mismatches. Such regions are classified as off-target if the depth of coverage is > **`r paste0(offtarget_level, "X")`**  over the mean background level
+* **`Background`** - Reads that align to the reference genome but are not included in any of the categories above
 
-Target regions are calculated using the genome coordinates from the provided reference genome (`r basename(reference)`) and the **R** **`GenomicRanges`** package (@granges2013) is used to select for the coordinates that correspond to **`OnTarget`**, **`TargetFlanking`** and **`Background`** regions. The genome is sampled as non-overlapping windows with a stride (window size) of **`r gstride`** nucleotides. 
+The identification of the genomic regions corresponding to these mapping groups was performed using the **`R`** software. The **`GenomicRanges`** and **`GenomicAlignments`** packages (@granges2013) were used for genome geometry methods and the **`Rsamtools`** package (@R-rsamtools) and **`GenomicAlignments`** (@granges2013) packages were used to summarise the depth-of-coverage information used to identify the **`off-target`** genomic intervals.
 
-The BAM file produced during the mapping analysis is loaded into memory as a **`GenomicAlignments`** object, in R, using the **`Rsamtools`** package (@R-rsamtools) and **`GenomicAlignments`** (@granges2013) packages. Reads overlapping the genomic windows were summarised using the **`GenomicRanges::binnedAverage`** method.
-
-The mean-depth of coverage for genomic regions that are not **on-target** or **target-proximal** was measured as **`r round(wga.cov, digits=2)`**.
-
-Off-target regions of the genome were selected by identifying the sequence windows with a mean depth-of-coverage of > **`r round((wga.cov * offtarget_level), digits=2)`**. The windows of length=(`r gstride`) were collapsed into their maximal contiguous blocks using the **`reduce`** method from the **`R`** **`GenomicRanges`** package. 
-
-The collapsed genomic windows corresponding to **ontarget**, **offtarget**, **targetproximal** and **background** were further analysed for their characteristics. These observations are presented in this report.
 
 
 ## Executive Summary
@@ -187,17 +180,18 @@ knitr::include_graphics(file.path(r_results, "EnrichmentValueBoxesA.png"))
 ```
 
 
-This infographic figure presents the key metrics that are required for benchmarking the performance of a DNA sequencig run following the  *Cas-mediated PCR-free enrichment protocol*. 
+The information presented above summarises key metrics for benchmarking the performance of a DNA sequencing run following the *Cas-mediated PCR-free enrichment protocol*. The expected values below are for a 24hr MinION/GridION run
 
-* Oxford Nanopore Technologies expects a lower flowcell throughput following a Cas-mediated enrichment protocol. The expected throughput may vary between 1 and 3.5Gb depending on the number of gene-targets and number of pooled-samples that are included in the sequencing run
-* 5-10% of the sequenced data should be on target. If less than 5% of data is on target then please consider RNA stability, input quality and probe design. Please review the [Cas-mediated PCR-free enrichment protocol](https://community.nanoporetech.com/protocols/Cas-mediated-PCR-free-enrich/) and consider a call with the Nanopore technical support team
-* The mean coverage per target should be >200X. If you mean coverage does not reach this level please consider your probe design and DNA quality. Please review the [Cas-mediated PCR-free enrichment protocol](https://community.nanoporetech.com/protocols/Cas-mediated-PCR-free-enrich/) 
-* Oxford Nanopore Technologies typically observes a 3000X depletion of non-target DNA.
+* Output will be lower following a Cas-mediated enrichment protocol compared to an average Nanopore sequencing experiment (0.5-3.5Gb depending on the number of gene-targets and number of pooled-samples that are included in the sequencing run)
+* 1-10% of the sequenced data should be on target
+* The mean coverage per target should be >200X
+* A 3000X depletion of non-target DNA should be observed.
+
+All these metrics are variable between experiments and depend on the size of the region of interest and the experimental set up. For further information on how to optimise these numbers please refer to the protocol.
 
 
 ## Mapping characteristics by genomic segments
 
-In a previous section, we described the stratification of the genome sequence into regions that are *on-target*, *off-target*, *target proximal* and *background*. The genomic coordinates were **`reduced`** to their minimal sets of non-overlapping coordinates and these regions have been annotated for the number of mapped sequence reads and other sequence characteristics. The table below outlines some of the key observations from each of these groups.
 
 
 ```{r summaryStatistics, echo=FALSE, results="asis", eval=TRUE}
@@ -262,18 +256,16 @@ kable(summary.df, format="html", col.names=rep(" ", ncol(summary.df)), caption="
 ```
 
 
-
-* The overall sequence throughput following the *Cas-mediated PCR-free enrichment protocol* is expected to be lower than the throughput following a non-enrichment protocol such as the LSK109 sequencing protocol. The target is a very small fraction of the complete genome space.
-* 5-10% of sequence should correspond to the *on-target* segment of the genome. If less than 5% of data is on target then please consider RNA stability, input quality and probe design. Please review the [Cas-mediated PCR-free enrichment protocol](https://community.nanoporetech.com/protocols/Cas-mediated-PCR-free-enrich/) and consider a call with the Nanopore technical support team
 * Background reads result from the incomplete dephosphorylation of the genomic DNA followed by a non-specific ligation of the adapter sequence
-* Off-target reads result from the Cas9 protein cutting the DNA at a genomic location outside of the target region. Further graphs to show the location and distribution of off-target regions is presented later in the report. If the number of off-target regions and reads is higher than desired, please review the probe design to assess possible SNPs and candidate sequence mismatches
-* Comparing the number of bases or reads classified as *target-flanking* relative to *on-target* values shows the efficiency of the probe design. A high number of reads/bases classified as *target-flanking* indicates read-through; it would be recommended to review the probe design for the crRNA probe that appears to "leak".
+* Off-target reads result from the Cas9 protein cutting the DNA at a genomic location outside of the target region. Further graphs to show the location and distribution of off-target regions are presented later in the report. If the number of off-target regions and reads is higher than desired, please review the probe design to assess possible SNPs and candidate sequence mismatches
+* Comparing the number of bases or reads classified as target-flanking relative to on-target values shows the efficiency of the probe design. A high number of reads/bases classified as target-flanking indicates read-through; it would be recommended to review the probe design for the crRNA probe that appears to “leak”
+
 
 
 ## Evaluation of individual target performance
 
-The previous table describes the key characteristics for the different target strata of the genome. To gain the best insight on the performance of the *Cas-mediated PCR-free enrichment protocol* it is preferable to consider the performance of each discrete target separately. The table below highlights the characteristics for the different target regions defined within the starting BED file.
 
+To gain the best insight on the performance of the *Cas-mediated PCR-free enrichment protocol* it is preferable to consider the performance of each discrete target separately. The table below highlights the characteristics for the different target regions defined within the starting BED file.
 
 ```{r, echo=FALSE, results="asis", eval=TRUE}
 bygene <- cbind(names(ontargetUniverse), scales::comma_format()(width(ontargetUniverse)), round(ontargetUniverse$dmean, digits=2),  scales::comma_format()(ontargetUniverse$rstart), scales::comma_format()(ontargetUniverse$basesstart), scales::comma_format()(round(ontargetUniverse$meanreadlen, digits=2)), round(ontargetUniverse$readq, digits=2), round(ontargetUniverse$mapq, digits=2), round(ontargetUniverse$strandp / ontargetUniverse$rstart*100, digits=2))
@@ -296,10 +288,12 @@ kable(bygene, format="html", caption="Table summarising target mapping for pre-d
 ```
 
 
-* The mean coverage per target should be >200x. If the coverage is below the desired level please review the probe design and the input DNA quality. Please check review the [Cas-mediated PCR-free enrichment protocol](https://community.nanoporetech.com/protocols/Cas-mediated-PCR-free-enrich/)
-* Reads on FWD(%) indicates the percentage of sequence reads that map to the forward strand. If this value is not in the region of 50% then one of the probes is not working effectively. Please check the *probe design advice* in the [Cas-mediated PCR-free enrichment protocol](https://community.nanoporetech.com/protocols/Cas-mediated-PCR-free-enrich/) 
-* A perfect mean map quality should be 60. A value of 60 indicates that reads are mapping to a single location in the genome (the target location). Lower mapping qualities may indicate either fragmented mapping (blocks of sequence interspersed by regions of no mapping at a single genomic location) or multi-mapping (the sequences can be mapped to multiple locations in the genome) leading to off-target effects.
+* The mean coverage per target should be >200x
+* Reads on FWD(%) indicates the percentage of sequence reads that map to the forward strand. If this value is not in the region of 50% then one of the probes is not working effectively
+* A perfect mean map quality should be 60. A value of 60 indicates that reads are mapping to a single location in the genome (the target location). Lower mapping qualities may indicate either fragmented mapping (blocks of sequence interspersed by regions of no mapping at a single genomic location) or multi-mapping (the sequences can be mapped to multiple locations in the genome) leading to off-target effects
 * Comparison of target read lengths may be used to identify the targets (and their probes) that either allow read-through. The ratio between the mean read length and target size should also be considered.
+
+If the values in the table above are not ideal then please check the probe design advice and input requirements in the Cas-mediated PCR-free enrichment protocol.
 
 
 
@@ -356,30 +350,23 @@ write.xlsx(as.data.frame(ontargetUniverse)[,c(1,2,3,4,6,8,14,16,23)],
            sheetName = "OnTargetMapping", append = FALSE)
 ```
 
+**The output files prepared for the on-target analysis include**
 
 * The list of on-target read Ids can be found in the file **`Analysis/OnTarget/<TARGETNAME>.mappedreads`**
 * The **`fastq`** sequence file containing the raw sequence reads corresponding to these Ids can be found in the file **`Analysis/OnTarget/<TARGETNAME>.fastq`**
 * The coordinate information for the off-target regionms can be found in the file **` `r ontarget.meta` `**
 
-## Visual representation of depth-of-coverage
 
-The tables presented in the previous two sections have provided a summary of general mapping characteristics and on-target statistics. It is also appropriate to plot a figure of depth-of-coverage against chromosome position for the genes of interest. This tutorial defines an **R** function called **`singlePlot`**. This method can be used to display a depth-of-coverage plot. The example below plots the coverage for the **HTT** target and uses a **`GenomicRanges`** object **`aggregatedGR`** to display the graph. **`aggregatedGR`** was precalculated by the **`snakemake`** workflow and is loaded in the tutorial markdown document.
+## Graphical review of depth-of-coverage for target genes
+
+The tables presented in the previous two sections have provided a summary of general mapping characteristics and on-target statistics. Plotting depth-of-coverage across the target regions also allows for an assessment of the performance of the crRNA guide used. The plots in this section review the depth of coverage, strandedness of mapping and leakiness of sequence coverage beyond the boundaries of the target region.
 
 
 ```{r, warning=FALSE}
 singlePlot("HTT", aggregatedGR)
 ```
 
-The figure above shows the depth-of-coverage for the target gene and the target-proximal regions up- and down-stream of the target. The boundaries of the target-gene, as defined in the BED file, are highlighted as red vertical bars. The horizontal golden bar shows the background threshold at which an off-target feature would be flagged.
-
-
-```{r, warning=FALSE}
-singlePlot("HTT", aggregatedGR, delta=22500)
-```
-
-This figure above presents the same data for the **HTT** target gene, but includes a delta parameter. This is used to shrink the number of bases of target-proximal sequence displayed; this gives a deeper insight into the depth of coverage across the target gene.
-
-
+The figure above shows the depth-of-coverage around a target region. The on-target region is located within the vertical red-bars and is flanked by the target-proximal regions. The horizontal bar shows the threshold at which an off-target feature would be defined. This plot is for the **`HTT`** target used in this tutorial.
 
 
 ```{r, echo=FALSE}
@@ -409,10 +396,10 @@ strandedPlot <- function(geneName, covData, delta=0) {
 
 
 ```{r, warning=FALSE}
-strandedPlot("HTT", aggregatedGR, delta=12500)
+strandedPlot("HTT", aggregatedGR)
 ```
 
-The figure above has been produced using a derivative of the earlier **`singlePlot`** method. This again presents the depth of coverage but this is shaded by the number of reads that are mapped to the forward strand or reverse strand respectively. Sequence depth that extends beyond the vertical bar can be used to identify the crRNA probes that appear leaky within the experimental context.
+The figure above presents the depth of coverage but is shaded by the strand (forward or reverse) to which the reads are mapped. This figure can be used to observe deviations from the expected 50:50 distribution of mapping between the + and - strands. Sequences that extend from the target regions and into the target-proximal regions may indicate sub-optimal performance of a crRNA guide sequence.
 
 
 
@@ -428,9 +415,7 @@ plotCoverageMegablock <- function(covData) {
 
 #if (length(unique(as.character(seqnames(backgroundUniverse)))) > 1) {
 plotCoverageMegablock(as.data.frame(aggregatedGR))
-cat("
-The final plot is a tiled plot that can be used to present multiple depth-of-coverage plots in a single figure. This looks great for studies that are evaluating multiple targets; if you have a single target region this plot will not be displayed.     
-")
+
 ```
 
 
@@ -466,7 +451,7 @@ suppressWarnings(plot <- ggplot(targetMelt, aes(chromosome, value)) + geom_col(a
 
 Having assessed on-target characteristics, it makes sense to also consider what has been mapped to off-target regions of the genome. 
 
-The **`ideogram`** below presents a description of the off-target mapping locations. Each shaded region (or bar) corresponds to an off-target region. There are in total **`r length(offtargetUniverse)`** genomic regions that satisfy the mean depth-of-coverage threshold of **`r round((wga.cov * offtarget_level), digits=2)`**
+The **`ideogram`** below presents a description of the off-target mapping locations split by chromosome. Each shaded region (or bar) corresponds to an off-target region. There are in total **`r length(offtargetUniverse)`** genomic regions that satisfy the mean depth-of-coverage threshold of **`r round((wga.cov * offtarget_level), digits=2)`**
 
 
 ```{r, echo=FALSE, message=FALSE}
@@ -524,6 +509,8 @@ write.xlsx(as.data.frame(offtargetUniverse)[,c(1,2,3,4,6,8,14,16,23)],
            sheetName = "OffTargetMapping", append = FALSE)
 ```
 
+
+**The output files prepared from the off-target analysis include**
 
 * The list of off-target read Ids can be found in the file **`Analysis/OffTarget/OffTarget.mappedreads`**
 * The **`fastq`** sequence file containing the raw sequence reads corresponding to these Ids can be found in the file **`Analysis/OffTarget/OffTarget.fastq`**
