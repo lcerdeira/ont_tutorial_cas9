@@ -19,6 +19,7 @@ Editing the workflow's configuration file, **`config.yaml`**, will allow the ana
 * **`Fastq`** format file containing reads that correspond to each of the target regions specified
 * **`Microsoft Excel`** format files containing summary statistics for sequence regions defined as showing off-target enrichment
 * **`Fastq`** format sequence file containing reads that were classified as off-target enrichment
+* **`Coordinates`** and instructions for reviewing candidate genomic regions with **`IGV`** the Integrated Genomics Viewer
 
 
 ## Methods utilised include: 
