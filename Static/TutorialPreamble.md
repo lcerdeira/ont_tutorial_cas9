@@ -34,9 +34,9 @@ Editing the workflow's configuration file, **`config.yaml`**, will allow the ana
 
 ## The computational requirements include: 
 
-* Computer running Linux (Centos7, Ubuntu 18_10, Fedora 29)
+* Computer running Linux (Centos7, Ubuntu 18_10, Fedora 29, macOS)
 * Multiple CPU cores are ideal; a 4 core CPU at minimum would be recommended 
-* At least 24 Gb RAM - this is sufficient for mapping against the human genome and can report a full MinION flowcell worth of sequence data
+* At least 16 Gb RAM - this is sufficient for mapping against the human genome and can report a full MinION flowcell worth of sequence data. The packaged dataset uses just human chromosome 4 and 8Gb RAM is sufficient
 * At least 15 Gb spare disk space for analysis and indices
 * Runtime with provided example data - approximately 45 minutes
 
@@ -103,7 +103,7 @@ This tutorial requires a computer workstation running a Linux operating system. 
 
 The described analytical workflow makes extensive use of the **`conda`** package management and the **`snakemake`** workflow software. These software packages and the functionality of **`Rmarkdown`** provide the source for a rich, reproducible and extensible tutorial document.
 
-The workflow contained within this Tutorial performs an authentic bioinformatics analysis and using the whole human genome as a reference sequence. There are some considerations in terms of memory and processor requirement. Indexing the whole human genome for sequence read mapping using **`minimap2`** will use at least **`18 Gb`** of memory. The minimal recommended hardware setup for this tutorial is therefore a 4 threaded computer with at least 24 Gb of RAM and 15 Gb of storage space. 
+The workflow contained within this Tutorial performs an authentic bioinformatics analysis and using the human chromosome 4 as a reference sequence. There are some considerations in terms of memory and processor requirement. Indexing the whole human genome for sequence read mapping using **`minimap2`** will use at least **`18 Gb`** of memory. The minimal recommended hardware setup for this tutorial is a 4 threaded computer with at least 8 Gb of RAM and 10 Gb of storage space. 
 
 There are few dependencies that need to be installed at the system level prior to running the tutorial. The **`conda`** package management software will coordinate the installation of the required bioinformatics software and their dependencies in user space - this is dependent on a robust internet connection.
 
