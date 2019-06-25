@@ -340,9 +340,9 @@ aggregateDepthInfo <- function(x, xr, ontarget=FALSE, geneId=NA) {
   
   # write the target sequences to file ...
   if (ontarget) {
-    write(mcols(c2)$qname, file.path(on_target, paste0(geneId, ".mappedreads")), append=TRUE)
+    write(mcols(c2)$qname, file.path(on_target, paste0(study, ".", geneId, ".mappedreads")), append=TRUE)
   } else {
-    write(mcols(c2)$qname, file.path(off_target, paste0(geneId, ".mappedreads")), append=TRUE)
+    write(mcols(c2)$qname, file.path(off_target, paste0(study, ".", geneId, ".mappedreads")), append=TRUE)
   }
   return(as.data.frame(ba))
 }

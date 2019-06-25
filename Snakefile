@@ -141,8 +141,8 @@ rule Rpreprocess:
     uqual = "Analysis/Minimap2/"+fastqTarget+".unmapped.quals"
   output:
     rout = "Analysis/R/"+fastqTarget+"_mapping_results.Rdata",
-    targets = expand("Analysis/OnTarget/{target}.mappedreads", target=TARGETS),
-    offtargets = "Analysis/OffTarget/OffTarget.mappedreads"
+    targets = expand("Analysis/OnTarget/"+fastqTarget+".{target}.mappedreads", target=TARGETS),
+    offtargets = "Analysis/OffTarget/"+fastqTarget+".OffTarget.mappedreads"
   shell:
     "Rscript Static/Source/harvest.R"
     
@@ -150,9 +150,9 @@ rule Rpreprocess:
 rule onTargetReadDump:
   input:
     rin = "Analysis/R/"+fastqTarget+"_mapping_results.Rdata", # not actually used; for method chaining only
-    readIds = "Analysis/OnTarget/{target}.mappedreads"
+    readIds = "Analysis/OnTarget/"+fastqTarget+".{target}.mappedreads"
   output:
-    fastq = "Analysis/OnTarget/{target}.fastq"
+    fastq = "Analysis/OnTarget/"+fastqTarget+".{target}.fastq"
   params:
     fap = fastqAccessParam
   shell:
@@ -162,9 +162,9 @@ rule onTargetReadDump:
 rule offTargetReadDump:
   input:
     rin = "Analysis/R/"+fastqTarget+"_mapping_results.Rdata", # not actually used; for method chaining only
-    readIds = "Analysis/OffTarget/OffTarget.mappedreads"
+    readIds = "Analysis/OffTarget/"+fastqTarget+".OffTarget.mappedreads"
   output:
-    fastq = "Analysis/OffTarget/OffTarget.fastq"
+    fastq = "Analysis/OffTarget/"+fastqTarget+".OffTarget.fastq"
   params:
     fap = fastqAccessParam
   shell:
@@ -183,6 +183,6 @@ rule renderTheReport:
 
 rule all:
   input:
-    expand("Analysis/OnTarget/{target}.fastq", target=TARGETS),
-    "Analysis/OffTarget/OffTarget.fastq",
+    expand("Analysis/OnTarget/"+fastqTarget+".{target}.fastq", target=TARGETS),
+    "Analysis/OffTarget/"+fastqTarget+".OffTarget.fastq",
     "ont_tutorial_cas9.html"

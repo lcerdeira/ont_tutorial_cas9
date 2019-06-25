@@ -171,11 +171,11 @@ ReadCharacteristicsValueBoxes <- ggplot(df, aes(x, y, height = h, width = w, lab
     theme_void() +
     guides(fill = F)
 
+infographicFile <- file.path(r_results, paste0(study, "_enrichment_info.png"))
 
+ggplot2::ggsave(infographicFile, plot=ReadCharacteristicsValueBoxes, device="png", units="cm", width=25, height=5, dpi=reportDPI)
 
-ggplot2::ggsave(file.path(r_results, "EnrichmentValueBoxesA.png"), plot=ReadCharacteristicsValueBoxes, device="png", units="cm", width=25, height=5, dpi=reportDPI)
-
-knitr::include_graphics(file.path(r_results, "EnrichmentValueBoxesA.png"))
+knitr::include_graphics(infographicFile)
 
 ```
 
@@ -352,9 +352,9 @@ write.xlsx(as.data.frame(ontargetUniverse)[,c(1,2,3,4,6,8,14,16,23)],
 
 **The output files prepared for the on-target analysis include**
 
-* The list of on-target read Ids can be found in the file **`Analysis/OnTarget/<TARGETNAME>.mappedreads`**
-* The **`fastq`** sequence file containing the raw sequence reads corresponding to these Ids can be found in the file **`Analysis/OnTarget/<TARGETNAME>.fastq`**
-* The coordinate information for the off-target regionms can be found in the file **` `r ontarget.meta` `**
+* The list of on-target read Ids can be found in the file **` `r file.path("Analysis","OnTarget",paste0(study,".<TARGETNAME>.mappedreads"))` `**
+* The **`fastq`** sequence file containing the raw sequence reads corresponding to these Ids can be found in the file **` `r file.path("Analysis","OnTarget",paste0(study,".<TARGETNAME>.fastq"))` `**
+* The coordinate information for the off-target regions can be found in the file **` `r ontarget.meta` `**
 
 
 ## Graphical review of depth-of-coverage for target genes
@@ -512,8 +512,8 @@ write.xlsx(as.data.frame(offtargetUniverse)[,c(1,2,3,4,6,8,14,16,23)],
 
 **The output files prepared from the off-target analysis include**
 
-* The list of off-target read Ids can be found in the file **`Analysis/OffTarget/OffTarget.mappedreads`**
-* The **`fastq`** sequence file containing the raw sequence reads corresponding to these Ids can be found in the file **`Analysis/OffTarget/OffTarget.fastq`**
+* The list of off-target read Ids can be found in the file **` `r file.path("Analysis","OffTarget",paste0(study,".OffTarget.mappedreads"))``**
+* The **`fastq`** sequence file containing the raw sequence reads corresponding to these Ids can be found in the file **` `r file.path("Analysis","OffTarget",paste0(study,".OffTarget.fastq"))` `**
 * The coordinate information for the off-target regions can be found in the file **` `r offtarget.meta` `**
 
 
