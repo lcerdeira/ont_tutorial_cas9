@@ -78,8 +78,8 @@ Editing the workflow's configuration file, **`config.yaml`**, will allow the ana
 Targeted sequencing strategies provide a cost-effective way of sequencing regions of interest to high coverage. Unlike other enrichment methods nanopore sequencing does not require amplification of any sort which allows us to target:
 
 * Long gene targets that are not amenable to long-range PCR (>30 kb) either in a single pass or using up to 100 target sites in a single assay (known as a tiling approach)
-* Regions with methylation patterns or modifications (that can be recovered using software such as TOMBO)
-* Regions that are highly repetitive
+* Regions with methylation patterns or modifications (that can be recovered using software such as TOMBO)
+* Regions that are highly repetitive
 
 [Oxford Nanopore Technologies](https://nanoporetech.com) provides a [Cas-mediated PCR-free enrichment protocol](https://community.nanoporetech.com/protocols/Cas-mediated-PCR-free-enrich/) which uses an enrichment strategy based on the design of CRISPR RNA (crRNA) probe sequences that may flank or tile-across one or more target regions. The crRNAs program the Cas9 protein to bind and cleave DNA at sites that match the crRNA sequence. This Cas9-mediated cut of the DNA, and the production of a newly-exposed and “deprotected” DNA end is the basis of the enrichment protocol.
 

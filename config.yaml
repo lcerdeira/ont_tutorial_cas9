@@ -6,7 +6,6 @@ pipeline: "Nanopore Cas9 enrichment tutorial"
 study_name: "cas9_FAK76554"
 
 # pointer to a reference sequence that reads will be mapped to
-#reference_genome: "http://ftp.ensembl.org/pub/release-96/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz"
 reference_genome: "http://ftp.ensembl.org/pub/release-96/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.chromosome.4.fa.gz"
 # bed file describing the target regions 
 target_regions: "RawData/enrichment_targets.bed"
@@ -17,7 +16,7 @@ fastq: "RawData/FAK76554.fastq.gz"
 # gstride is the bin size for summarising depth of coverage across the reference_genome
 gstride: 100
 # target_proximity is the distance up- and down-stream of ontarget BED for defining target proximal mapping
-target_proximity: 25000
+target_proximity: 10000
 # a threshold for defining off-target mapping; this is ($level$ * mean background) expression
 offtarget_level: 20
 # how many threads may a process use on this system?

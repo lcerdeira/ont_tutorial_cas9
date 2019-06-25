@@ -182,10 +182,10 @@ knitr::include_graphics(file.path(r_results, "EnrichmentValueBoxesA.png"))
 
 The information presented above summarises key metrics for benchmarking the performance of a DNA sequencing run following the *Cas-mediated PCR-free enrichment protocol*. The expected values below are for a 24hr MinION/GridION run
 
-* Output will be lower following a Cas-mediated enrichment protocol compared to an average Nanopore sequencing experiment (0.5-3.5Gb depending on the number of gene-targets and number of pooled-samples that are included in the sequencing run)
-* 1-10% of the sequenced data should be on target
-* The mean coverage per target should be >200X
-* A 3000X depletion of non-target DNA should be observed.
+* Output will be lower following a Cas-mediated enrichment protocol compared to an average Nanopore sequencing experiment (0.5-3.5Gb depending on the number of gene-targets and number of pooled-samples that are included in the sequencing run)
+* 1-10% of the sequenced data should be on target
+* The mean coverage per target should be >200X
+* A 3000X depletion of non-target DNA should be observed
 
 All these metrics are variable between experiments and depend on the size of the region of interest and the experimental set up. For further information on how to optimise these numbers please refer to the protocol.
 
@@ -257,8 +257,8 @@ kable(summary.df, format="html", col.names=rep(" ", ncol(summary.df)), caption="
 
 
 * Background reads result from the incomplete dephosphorylation of the genomic DNA followed by a non-specific ligation of the adapter sequence
-* Off-target reads result from the Cas9 protein cutting the DNA at a genomic location outside of the target region. Further graphs to show the location and distribution of off-target regions are presented later in the report. If the number of off-target regions and reads is higher than desired, please review the probe design to assess possible SNPs and candidate sequence mismatches
-* Comparing the number of bases or reads classified as target-flanking relative to on-target values shows the efficiency of the probe design. A high number of reads/bases classified as target-flanking indicates read-through; it would be recommended to review the probe design for the crRNA probe that appears to “leak”
+* Off-target reads result from the Cas9 protein cutting the DNA at a genomic location outside of the target region. Further graphs to show the location and distribution of off-target regions are presented later in the report. If the number of off-target regions and reads is higher than desired, please review the probe design to assess possible SNPs and candidate sequence mismatches
+* Comparing the number of bases or reads classified as target-flanking relative to on-target values shows the efficiency of the probe design. A high number of reads/bases classified as target-flanking indicates read-through; it would be recommended to review the probe design for the crRNA probe that appears to “leak”
 
 
 
