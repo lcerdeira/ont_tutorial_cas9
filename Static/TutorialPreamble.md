@@ -1,6 +1,6 @@
 # Statement of tutorial objectives
 
-The aim of this tutorial is to demonstrate a workflow for mapping long DNA sequence reads to a reference genome, and to evaluate the performance of a Cas9 based target enrichment strategy. This workflow is suitable for Oxford Nanopore fastq sequence collections and requires a reference genome and a BED file of target coordinates.
+The aim of this tutorial is to demonstrate a workflow for mapping long DNA sequence reads to a reference genome, and to evaluate the performance of a Cas9-based target enrichment strategy. This workflow is suitable for Oxford Nanopore fastq sequence collections and requires a reference genome and a BED file of target coordinates.
 
 The tutorial is packaged with example data, and the workflow can be reproduced to address questions such as
 
@@ -8,13 +8,13 @@ The tutorial is packaged with example data, and the workflow can be reproduced t
 * What is the depth of coverage for reads that map to pre-defined target regions?
 * What is the background depth of coverage for the non-targetted genomic regions?
 * Is there evidence for off-target enrichment of genomic regions?
-* How has the Cas9 based target-enrichment worked for **`HTT`**, our gene of interest?
+* How has the Cas9-based target-enrichment worked for **`HTT`**, our gene of interest?
 
 Editing the workflow's configuration file, **`config.yaml`**, will allow the analyses to be run using different DNA sequence collections, reference genomes, and with different BED files that define the regions of interest.
 
 ## What will this tutorial produce?
 
-* A rich HTML format report containing summary statistics and figures highlighting performance of the enrichment protocol
+* A **`rich HTML`** format report containing summary statistics and figures highlighting performance of the enrichment protocol
 * **`Microsoft Excel`** format files containing coordinates and summary statistics for on-target regions
 * **`Fastq`** format file containing reads that correspond to each of the target regions specified
 * **`Microsoft Excel`** format files containing summary statistics for sequence regions defined as showing off-target enrichment
@@ -36,7 +36,7 @@ Editing the workflow's configuration file, **`config.yaml`**, will allow the ana
 
 * Computer running Linux (Centos7, Ubuntu 18_10, Fedora 29, macOS)
 * Multiple CPU cores are ideal; a 4 core CPU at minimum would be recommended 
-* At least 16 Gb RAM - this is sufficient for mapping against the human genome and can report a full MinION flowcell worth of sequence data. The packaged dataset uses just human chromosome 4 and 8Gb RAM is sufficient
+* At least 16 Gb RAM - this is sufficient for mapping against the human genome and can report a full MinION flowcell worth of sequence data. The packaged dataset uses just human chromosome 4 and 8 Gb RAM is sufficient
 * At least 15 Gb spare disk space for analysis and indices
 * Runtime with provided example data - approximately 45 minutes
 
@@ -78,19 +78,19 @@ Editing the workflow's configuration file, **`config.yaml`**, will allow the ana
 Targeted sequencing strategies provide a cost-effective way of sequencing regions of interest to high coverage. Unlike other enrichment methods nanopore sequencing does not require amplification of any sort which allows us to target:
 
 * Long gene targets that are not amenable to long-range PCR (>30 kb) either in a single pass or using up to 100 target sites in a single assay (known as a tiling approach)
-* Regions with methylation patterns or modifications (that can be recovered using software such as TOMBO)
+* Regions with methylation patterns or modifications (that can be recovered using software such as Tombo)
 * Regions that are highly repetitive
 
-[Oxford Nanopore Technologies](https://nanoporetech.com) provides a [Cas-mediated PCR-free enrichment protocol](https://community.nanoporetech.com/protocols/Cas-mediated-PCR-free-enrich/) which uses an enrichment strategy based on the design of CRISPR RNA (crRNA) probe sequences that may flank or tile-across one or more target regions. The crRNAs program the Cas9 protein to bind and cleave DNA at sites that match the crRNA sequence. This Cas9-mediated cut of the DNA, and the production of a newly-exposed and “deprotected” DNA end is the basis of the enrichment protocol.
+[Oxford Nanopore Technologies](https://nanoporetech.com) provides a [Cas-mediated PCR-free enrichment protocol](https://community.nanoporetech.com/protocols/Cas-mediated-PCR-free-enrich/) which uses an enrichment strategy based on the design of CRISPR RNA (crRNA) probe sequences that may flank or tile across one or more target regions. The crRNAs program the Cas9 protein to bind and cleave DNA at sites that match the crRNA sequence. This Cas9-mediated cutting of the DNA, and the production of a newly-exposed and phosphorylated DNA end is the basis of the enrichment protocol.
 
 For an equivalent amount of sequenced library a Cas-mediated DNA enrichment will provide a higher coverage for the targeted regions than sequencing the whole genome alone.
 
-The *Cas-mediated PCR-free enrichment protocol* recommends a strategy for the design of CRISPR RNA (crRNA) probes and provides recommendations for the quality of the purified DNA. These recommendations aim to maximise the on-target sequence recovery by reducing both the DNA background and amounts of off-target DNA. When performing optimally the protocol will delivers up to a couple of Gb of data from a MinION flow cell from 48 hours of sequencing and provide 100s-1000x coverage across target regions. This tutorial has been prepared to help assess performance of a Cas-mediated enrichment study and to help identify target regions and DNA preparation steps that may require further optimisation.
+The Cas-mediated PCR-free enrichment protocol recommends a strategy for the design of CRISPR RNA (crRNA) probes and provides recommendations for the quality of the purified DNA. These recommendations aim to maximise the on-target sequence recovery by reducing both the DNA background and amounts of off-target DNA. When performing optimally the protocol will delivers up to a couple of gigabases of data from a MinION flow cell from 48 hours of sequencing and provide 100s-1000x coverage across target regions. This tutorial has been prepared to help assess performance of a Cas-mediated enrichment study and to help identify target regions and DNA preparation steps that may require further optimisation.
 
 
 There are five goals for this tutorial:
 
-* To introduce a literate framework for analysing Oxford Nanopore *Cas-mediated PCR-free enriched DNA sequence* data
+* To introduce a literate framework for analysing Oxford Nanopore Cas-mediated PCR-free enriched DNA sequence data
 * To utilise best data-management practices
 * To map sequence reads to the reference genome
 * To identify and report the sequence reads that map to the defined target regions and off-target regions
@@ -103,7 +103,7 @@ This tutorial requires a computer workstation running a Linux operating system. 
 
 The described analytical workflow makes extensive use of the **`conda`** package management and the **`snakemake`** workflow software. These software packages and the functionality of **`Rmarkdown`** provide the source for a rich, reproducible and extensible tutorial document.
 
-The workflow contained within this Tutorial performs an authentic bioinformatics analysis and using the human chromosome 4 as a reference sequence. There are some considerations in terms of memory and processor requirement. Indexing the whole human genome for sequence read mapping using **`minimap2`** will use at least **`18 Gb`** of memory. The minimal recommended hardware setup for this tutorial is a 4 threaded computer with at least 8 Gb of RAM and 10 Gb of storage space. 
+The workflow contained within this tutorial performs an authentic bioinformatics analysis and using the human chromosome 4 as a reference sequence. There are some considerations in terms of memory and processor requirement. Indexing the whole human genome for sequence read mapping using **`minimap2`** will use at least **`18 Gb`** of memory. The minimal recommended hardware setup for this tutorial is a 4 threaded computer with at least 8 Gb of RAM and 10 Gb of storage space. 
 
 There are few dependencies that need to be installed at the system level prior to running the tutorial. The **`conda`** package management software will coordinate the installation of the required bioinformatics software and their dependencies in user space - this is dependent on a robust internet connection.
 
@@ -114,7 +114,7 @@ As a best practice this tutorial will separate primary DNA sequence data (the ba
 
 # Experimental setup
 
-The first required step for performing a meta-analysis of a *Cas-mediated PCR-free enrichment protocol* based sequencing study is to define the experimental design. 
+The first required step for performing a meta-analysis of a Cas-mediated PCR-free enrichment protocol based sequencing study is to define the experimental design. 
 
 The example data included with this tutorial describes a Cas-mediated enrichment experiment that targets the HTT gene. The enriched sequence library has been sequenced using a single MinION flowcell on a GridION sequencing device. To manage the sizes of the datasets downloaded, the example dataset provided has been filtered to select for only the sequence reads on **`Chromosome 4`**. The example data is therefore a **synthetic dataset** - but no other enrichment or modification of the sequences has been performed.  
 
@@ -129,9 +129,9 @@ The design for the tutorial is defined within a YAML format configuration file (
 * **`pipeline`** identifies the workflow that this configuration file belongs to
 * **`study_name`** is a label used to identify the analysis and the label is used to name the files produced during the analysis
 * **`reference_genome`** refers to the genome against which the sequence reads will be mapped. In this tutorial a URL is provided and the **`Snakemake`** workflow will download the corresponding file.
-* **`target_regions`** points to a BED format file that describes the genomic coordinates for each of the targets being assessed. The BED file format is a tab-delimited file with un-named columns describing, in order, the chromosome, start position, end position and target name.
+* **`target_regions`** points to a BED format file that describes the genomic coordinates for each of the targets being assessed. The BED file format is a tab-delimited file with unnamed columns describing, in order, the chromosome, start position, end position and target name.
 * **`fastq`** is a pointer to either a single fastq file (may be gzipped) or a folder of fastq files. These are the sequences that will be mapped to the **`reference_genome`** and assessed for mapping to the targets defined in **`target_regions`**
-* **`gstride`**, **`target_proximity`** and **`offtarget_level`** are parameters used to control the analysis. For offtarget and background assessment, the genome is split into windows **`gstride`** nucleotides in length and mean coverage is assessed. Regions with a mean-coverage of > **`offtarget_level X`** the mean background level are defined as being off-target enrichment regions. **`target_proximity`** defines the window up- and down-stream of the **`target_regions`** that are excluded from the background calculations. This reduces overall mean background by excluding ontarget reads that extend beyond the target-region.
+* **`gstride`**, **`target_proximity`** and **`offtarget_level`** are parameters used to control the analysis. For offtarget and background assessment, the genome is split into windows **`gstride`** nucleotides in length and mean coverage is assessed. Regions with a mean-coverage of > **`offtarget_level X`** the mean background level are defined as being off-target enrichment regions. **`target_proximity`** defines the window up- and down-stream of the **`target_regions`** that are excluded from the background calculations. This reduces overall mean background by excluding ontarget reads that extend beyond the target region.
 
 
 \newpage
@@ -145,7 +145,7 @@ The **`snakemake`** workflow will call methods that include **`minimap2`** @mini
 
 ![](Static/Images/dag.png) 
 
-The precise commands within the **`Snakefile`** include
+The precise commands within the **`snakefile`** include
 
 * download the specified reference genome
 * use **`minimap2`** to index the reference genome
@@ -175,7 +175,7 @@ snakemake -j 4 all
 
 The **`Rmarkdown`** script can be run using the **`knit`** dialog in the **`Rstudio`** software. 
 
-The document can also be rendered from the command line with the following command. This command is  run automatically during the Snakemake workflow.
+The document can also be rendered from the command line with the following command. This command is  run automatically during the **`snakemake`** workflow.
 
 \fontsize{8}{12}
 ```
