@@ -51,7 +51,7 @@ library(GenomicAlignments)
 library(dplyr)
 library(emojifont)
 library(ggbio)
-library(xlsx)
+library(writexl)
 library(tibble)
 
 config <- yaml.load_file("config.yaml")
@@ -343,11 +343,10 @@ singlePlot <- function(geneName, covData, delta=0) {
   return(plot)
 }
 
-ontarget.meta <- file.path("Analysis", "OnTarget", paste0(study,"_ontarget.xls"))
+ontarget.meta <- file.path("Analysis", "OnTarget", paste0(study,"_ontarget.xlsx"))
 #write.csv(as.data.frame(ontargetUniverse)[,c(1,2,3,4,6,8,14,16,23)], ontarget.meta)
-write.xlsx(as.data.frame(ontargetUniverse)[,c(1,2,3,4,6,8,14,16,23)], 
-           file = ontarget.meta,
-           sheetName = "OnTargetMapping", append = FALSE)
+write_xlsx(as.data.frame(ontargetUniverse)[,c(1,2,3,4,6,8,14,16,23)], 
+           path = ontarget.meta)
 ```
 
 **The output files prepared for the on-target analysis include**
@@ -498,15 +497,13 @@ kable(offtargtop, format="html", caption="Table summarising the location and cha
   kable_styling(c("striped", "condensed")) %>%
   footnote(symbol=c("This table has been prepared using only read mapping information that corresponds to a primary map", "The reads in segment column describes the number of sequences that start within this genomic interval (using SAM start coordinate only)", "mean read length is the mean sequence read length for the mapping reads identified; their strandedness is summarised in %FWD reads (the number of sequences that appear on the forward strand) and the mapping quality is summarised in mapq"), symbol_title="please note: ", footnote_as_chunk = TRUE)
 
-offtarget.meta <- file.path("Analysis", "OffTarget", paste0(study,"_offtarget.xls"))
-#write.csv(as.data.frame(offtargetUniverse)[,c(1,2,3,4,6,8,14,16,23)], offtarget.meta)
+offtarget.meta <- file.path("Analysis", "OffTarget", paste0(study,"_offtarget.xlsx"))
 
 # small reporting issue - reads are not double counted that means we can have blocks of background where there is
 # sufficient depth, but no reads originate in the block - this leads to Na mean quality and mapq
 
-write.xlsx(as.data.frame(offtargetUniverse)[,c(1,2,3,4,6,8,14,16,23)], 
-           file = offtarget.meta,
-           sheetName = "OffTargetMapping", append = FALSE)
+write_xlsx(as.data.frame(offtargetUniverse)[,c(1,2,3,4,6,8,14,16,23)], 
+           path = offtarget.meta)
 ```
 
 

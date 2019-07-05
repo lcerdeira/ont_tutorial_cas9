@@ -10,7 +10,7 @@ dependencies:
   - minimap2
   - seqtk
   - r
-  - r-xlsx
+  - r-writexl
   - rstudio
   - graphviz
   - imagemagick
