@@ -171,18 +171,7 @@ rule offTargetReadDump:
     "{params.fap} | seqtk subseq - {input.readIds} > {output.fastq}"
 
 
-# render the report ...
-rule renderTheReport:
-  input:
-    rin = "Analysis/R/"+fastqTarget+"_mapping_results.Rdata"
-  output:
-    "ont_tutorial_cas9.html"
-  shell:
-    """R --slave -e 'rmarkdown::render("ont_tutorial_cas9.Rmd", "html_document")'"""
-
-
 rule all:
   input:
     expand("Analysis/OnTarget/"+fastqTarget+".{target}.fastq", target=TARGETS),
-    "Analysis/OffTarget/"+fastqTarget+".OffTarget.fastq",
-    "ont_tutorial_cas9.html"
+    "Analysis/OffTarget/"+fastqTarget+".OffTarget.fastq"
