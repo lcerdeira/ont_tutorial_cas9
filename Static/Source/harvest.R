@@ -1,9 +1,18 @@
-library(yaml)
-library(parallel)
-library(ShortRead)
-library(pbmcapply)
-library(dplyr)
-library(GenomicRanges)
+suppressWarnings(
+  suppressMessages(
+    suppressPackageStartupMessages(
+      {
+        library(yaml)
+        library(parallel)
+        library(ShortRead)
+        library(pbmcapply)
+        library(dplyr)
+        library(GenomicRanges)
+      }       
+    )
+  )
+)        
+
 
 config <- yaml.load_file("config.yaml")
 bed_src <- config$target_regions
@@ -312,7 +321,9 @@ aggregateDepthInfo <- function(x, xr, ontarget=FALSE, geneId=NA) {
   if (is.na(geneId)) { 
     geneId <- names(targetRegion) 
   }
-  cat(paste0("geneId:", geneId, "\n"))
+  if (geneId != "OffTarget") {
+    cat(paste0("geneId:", geneId, "\n"))
+  }
   
   c0 <- wga[seqnames(wga)==as.character(seqnames(targetRegion))]
   c1 <- c0[subjectHits(findOverlaps(proximalRegion, granges(c0)))]
@@ -350,18 +361,20 @@ aggregateDepthInfo <- function(x, xr, ontarget=FALSE, geneId=NA) {
 
 
 cat(paste0("scoring data per target region", "\n"))
-aggregatedCov <- bind_rows(pbmclapply(seq_along(ontargetUniverse), aggregateDepthInfo, xr=ontargetUniverse, ontarget=TRUE, mc.cores=min(detectCores()-1, max_threads)), .id = "column_label")
-aggregatedCovFile <- file.path(r_results, paste0(study, "_aggregated_coverage", ".Rdata"))
+suppressWarnings({
+  aggregatedCov <- bind_rows(pbmclapply(seq_along(ontargetUniverse), aggregateDepthInfo, xr=ontargetUniverse, ontarget=TRUE, mc.cores=min(detectCores()-1, max_threads)), .id = "column_label")
+  aggregatedCovFile <- file.path(r_results, paste0(study, "_aggregated_coverage", ".Rdata"))
+  aggregatedGR <- GenomicRanges::makeGRangesFromDataFrame(aggregatedCov[,-1], keep.extra.columns = TRUE)
+  save(aggregatedGR, file=aggregatedCovFile)
+})
 
-aggregatedGR <- GenomicRanges::makeGRangesFromDataFrame(aggregatedCov[,-1], keep.extra.columns = TRUE)
 
-save(aggregatedGR, file=aggregatedCovFile)
+cat(paste0("parsing off-target/background coverage - please be patient ...", "\n"))
+suppressWarnings({
+  offtCov <- pbmclapply(seq_along(offtargetUniverse), aggregateDepthInfo, xr=offtargetUniverse, geneId="OffTarget", mc.cores=min(detectCores()-1,max_threads))
+  aggregatedOff <- bind_rows(offtCov, .id = "column_label")
+  aggregatedOffFile <- file.path(r_results, paste0(study, "_aggregated_offt_coverage", ".Rdata"))
+  save(aggregatedOff, file=aggregatedOffFile)
+})
 
-
-offtCov <- pbmclapply(seq_along(offtargetUniverse), aggregateDepthInfo, xr=offtargetUniverse, geneId="OffTarget", mc.cores=min(detectCores()-1,max_threads))
-aggregatedOff <- bind_rows(offtCov, .id = "column_label")
-aggregatedOffFile <- file.path(r_results, paste0(study, "_aggregated_offt_coverage", ".Rdata"))
-#aggregatedOffGR <- GenomicRanges::makeGRangesFromDataFrame(aggregatedOff[,-1], keep.extra.columns = TRUE)
-#save(aggregatedOffGR, file=aggregatedOffFile)
-save(aggregatedOff, file=aggregatedOffFile)
 
