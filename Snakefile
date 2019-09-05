@@ -8,6 +8,8 @@ HTTP = HTTPRemoteProvider()
 
 configfile: "config.yaml"
 
+usableThreads = 8
+
 # characterise and/or prepare the specified reference genome
 reference_genome = config["reference_genome"]
 # ReferenceGenome is a derivative of the defined location
@@ -90,9 +92,10 @@ rule Minimap2Index:
     genome = UnzippedReferenceGenome if gzippedRef else ReferenceGenome
   output:
     index = ReferenceGenomeMMI
+  threads: usableThreads
   shell:
     """
-    minimap2 -t 8 -d {output.index} {input.genome}
+    minimap2 -t {threads} -d {output.index} {input.genome}
     """
 
 
@@ -109,8 +112,9 @@ rule Minimap2:
   params:
     rg = config["pipeline"],
     fap = fastqAccessParam
+  threads: usableThreads
   shell:
-    """{params.fap} | minimap2 -2 -a -x map-ont --MD -R '@RG\\tID:{params.rg}\\tSM:{params.rg}' -t 8 {input.ref} - | samtools view -@ 4 -F 0x4 -O BAM -U {output.ubam} | samtools sort -@ 4 > {output.bam}"""
+    """{params.fap} | minimap2 -2 -a -x map-ont --MD -R '@RG\\tID:{params.rg}\\tSM:{params.rg}' -t {threads} {input.ref} - | samtools view -@ {threads} -F 0x4 -O BAM -U {output.ubam} | samtools sort -@ {threads} > {output.bam}"""
 
 
 # build BAM index
@@ -119,8 +123,9 @@ rule SortedBamIndex:
     bam = "Analysis/Minimap2/"+fastqTarget+".bam"
   output:
     index = "Analysis/Minimap2/"+fastqTarget+".bam.bai"
+  threads: usableThreads
   shell:
-    "samtools index -b {input.bam}"
+    "samtools index -@ {threads} -b {input.bam}"
 
 
 # render quality values from unmapped reads 
@@ -129,8 +134,9 @@ rule RenderUnmappedQvals:
     ubam = "Analysis/Minimap2/"+fastqTarget+".unmapped.bam"
   output:
     uqual = "Analysis/Minimap2/"+fastqTarget+".unmapped.quals"
+  threads: 8
   shell:
-    "samtools view -@ 5 -O sam {input.ubam} | awk '{{print $11}}' > {output.uqual}"
+    "samtools view -@ {threads} -O sam {input.ubam} | awk '{{print $11}}' > {output.uqual}"
 
 
 # perform the R preprocess 
