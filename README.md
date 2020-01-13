@@ -73,7 +73,6 @@ Other dependencies include
 5. Initialise conda environment with 
 ```
     conda activate ont_tutorial_cas9
-    R CMD javareconf > /dev/null 2>&1
 ```
 
 #### Compilation From Source
