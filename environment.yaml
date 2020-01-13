@@ -1,6 +1,6 @@
 channels:
-  - bioconda
   - conda-forge
+  - bioconda
   - r
   - sagrudd
 dependencies:
@@ -10,6 +10,7 @@ dependencies:
   - minimap2
   - seqtk
   - r
+  - r::r-stringi # this is a support bane ... declare explicit version
   - r-writexl
   - rstudio
   - graphviz
