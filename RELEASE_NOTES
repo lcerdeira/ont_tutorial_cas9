@@ -1,0 +1,11 @@
+2020-01-13
+- Bug fixes
+  - R package stringi is throwing libicui18n.so.64: cannot open shared object file
+      - this is an icu dependency stringi built with 64.2 ...
+        - collision between bioconda::stringi and r::stringi = FIXED
+  - GRanges error in snakemake (harvest.R)
+      - this is a data shape error due to variable number of annotation columns in FASTA
+      - instead of refering to column position - use column name = FIXED
+  - tutorial.Rmd (line=365) HTT gene target is hard coded
+      - have updated this to pick out the 1st target from ontargetUniverse = FIXED
+      - see also line 398/368

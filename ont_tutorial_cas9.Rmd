@@ -362,10 +362,12 @@ The tables presented in the previous two sections have provided a summary of gen
 
 
 ```{r, warning=FALSE}
-singlePlot("HTT", aggregatedGR)
+singlePlot(names(ontargetUniverse)[1], aggregatedGR)
+# to plot the figure for a target called ¨Example¨ we could specify
+# singlePlot("Example", aggregatedGR)
 ```
 
-The figure above shows the depth-of-coverage around a target region. The on-target region is located within the vertical red-bars and is flanked by the target-proximal regions. The horizontal bar shows the threshold at which an off-target feature would be defined. This plot is for the **`HTT`** target used in this tutorial.
+The figure above shows the depth-of-coverage around a target region. The on-target region is located within the vertical red-bars and is flanked by the target-proximal regions. The horizontal bar shows the threshold at which an off-target feature would be defined. This plot is for the **` `r names(ontargetUniverse)[1]` `** target used in this tutorial.
 
 
 ```{r, echo=FALSE}
@@ -395,7 +397,9 @@ strandedPlot <- function(geneName, covData, delta=0) {
 
 
 ```{r, warning=FALSE}
-strandedPlot("HTT", aggregatedGR)
+strandedPlot(names(ontargetUniverse)[1], aggregatedGR)
+# to plot the figure for a target called ¨Example¨ we could specify
+# strandedPlot("Example", aggregatedGR)
 ```
 
 The figure above presents the depth of coverage but is shaded by the strand (forward or reverse) to which the reads are mapped. This figure can be used to observe deviations from the expected 50:50 distribution of mapping between the + and - strands. Sequences that extend from the target regions and into the target-proximal regions may indicate suboptimal performance of a crRNA guide sequence.

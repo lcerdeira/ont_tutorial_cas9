@@ -107,6 +107,9 @@ loadReferenceGenome()
 if (length(grep("\\.", referenceGenome[,1])) > 0) {
   referenceGenome <- referenceGenome[-grep("\\.", referenceGenome[,1]),]
 }
+if (length(grep("_", referenceGenome[,1])) > 0) {
+  referenceGenome <- referenceGenome[-grep("_", referenceGenome[,1]),]
+}
 
 ####################
 # identify the project BAM files
@@ -129,7 +132,7 @@ br <- GRanges(seqnames=unlist(bed[,1]), IRanges(start=unlist(bed[,2]), end=unlis
 # define flanking regions for the target-proximal analysis
 fr <- union(flank(br, width=target_proximity, start=TRUE), flank(br, width=target_proximity, start=FALSE))
 # create a genomic ranges object for the chromosomes
-gr <- GRanges(seqnames=referenceGenome[,1], IRanges(start=1, end=nchar(referenceGenomeSequence)[referenceGenome[,5]]))
+gr <- GRanges(seqnames=referenceGenome[,1], IRanges(start=1, end=nchar(referenceGenomeSequence)[referenceGenome$sid]))
 # and define an off-target ranges ..
 or <- setdiff(disjoin(c(gr, GenomicRanges::reduce(union(br, fr)))), GenomicRanges::reduce(union(br, fr)))
 # name the genes associated with the BED annotations for subsequent display ...
